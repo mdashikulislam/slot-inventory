@@ -25,7 +25,7 @@ export const phones = pgTable("phones", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Create insert schema: phoneNumber required, email optional (DB default is empty string)
+// Create insert schema: phoneNumber required, email & remark optional (DB defaults)
 export const insertPhoneSchema = createInsertSchema(phones)
   .omit({ id: true, createdAt: true })
   .extend({
@@ -46,10 +46,12 @@ export const ips = pgTable("ips", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertIpSchema = createInsertSchema(ips).omit({
-  id: true,
-  createdAt: true,
-});
+export const insertIpSchema = createInsertSchema(ips)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    ipAddress: z.string().min(1, "IP address is required"),
+    port: z.string().min(1, "Port is required"),
+  });
 
 export type InsertIp = z.infer<typeof insertIpSchema>;
 export type Ip = typeof ips.$inferSelect;

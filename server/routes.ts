@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import { type Server } from "http";
 import { storage } from "./storage";
 import { insertPhoneSchema, insertIpSchema, insertSlotSchema } from "@shared/schema";
 import { z } from "zod";
@@ -107,11 +107,10 @@ export async function registerRoutes(
 
   app.post("/api/ips", async (req, res) => {
     try {
-      // Apply defaults if missing
+      // Apply defaults for username/password if missing
       const body = { ...req.body };
       if (!body.username) body.username = "ashik";
       if (!body.password) body.password = "11224411";
-      if (!body.port) body.port = "9001";
 
       const data = insertIpSchema.parse(body);
       const ip = await storage.createIp(data);
@@ -187,7 +186,7 @@ export async function registerRoutes(
   app.post("/api/slots", async (req, res) => {
     try {
       const body = { ...req.body };
-      if (body.usedAt && typeof body.usedAt === "string") {
+      if (typeof body.usedAt === "string") {
         body.usedAt = new Date(body.usedAt);
       }
       const data = insertSlotSchema.parse(body);

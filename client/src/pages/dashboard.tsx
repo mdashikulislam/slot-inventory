@@ -1,22 +1,22 @@
 import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
 import { usePhones, useIps, useSlots, useCreateSlot, useDeleteSlot } from "@/hooks/use-data";
-import type { Phone, Ip, Slot } from "@shared/schema";
+import type { Phone, Ip } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link2, Smartphone, Network, CheckCircle2, Search, Calendar as CalendarIcon, X, MoreHorizontal, ArrowUpRight, Activity } from "lucide-react";
+import { Link2, Smartphone, Network, CheckCircle2, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export default function Dashboard() {
   const { data: phones, isLoading: phonesLoading } = usePhones();
@@ -39,6 +39,8 @@ export default function Dashboard() {
 
   // Dashboard Filters
   const [searchQuery, setSearchQuery] = useState("");
+  const [phoneFilter, setPhoneFilter] = useState<"all" | "used" | "available">("all");
+  const [ipFilter, setIpFilter] = useState<"all" | "used" | "available">("all");
 
   // Helper function to calculate slot usage within 15 days
   const getPhoneSlotUsage = (phoneId: string): number => {
@@ -102,19 +104,32 @@ export default function Dashboard() {
 
   const filteredPhones = useMemo(() => {
     if (!phones) return [];
-    return phones.filter(p => 
-      p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.provider?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [phones, searchQuery]);
+    return phones
+      .filter(p =>
+        p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .filter(p => {
+        const usage = getPhoneSlotUsage(p.id);
+        if (phoneFilter === "available") return usage < 4;
+        if (phoneFilter === "used") return usage > 0;
+        return true;
+      });
+  }, [phones, searchQuery, phoneFilter, slots]);
 
   const filteredIps = useMemo(() => {
     if (!ips) return [];
-    return ips.filter(i => 
-      i.ipAddress.includes(searchQuery) ||
-      i.provider?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [ips, searchQuery]);
+    return ips
+      .filter(i =>
+        i.ipAddress.includes(searchQuery) ||
+        i.provider?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .filter(i => {
+        const usage = getIpSlotUsage(i.id);
+        if (ipFilter === "available") return usage < 4;
+        if (ipFilter === "used") return usage > 0;
+        return true;
+      });
+  }, [ips, searchQuery, ipFilter, slots]);
 
   // Metrics
   const totalPhones = phones?.length || 0;
@@ -181,7 +196,14 @@ export default function Dashboard() {
                   <CardTitle className="text-base font-semibold tracking-tight">Phone Utilization</CardTitle>
                 </div>
               </div>
-              <Badge variant="outline" className="bg-background font-mono text-xs">{filteredPhones.length} Devices</Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-background font-mono text-xs">{filteredPhones.length} Devices</Badge>
+                <ToggleGroup type="single" value={phoneFilter} onValueChange={(v) => v && setPhoneFilter(v as any)} className="justify-start" aria-label="Phone filter">
+                  <ToggleGroupItem value="all">All</ToggleGroupItem>
+                  <ToggleGroupItem value="used">Used</ToggleGroupItem>
+                  <ToggleGroupItem value="available">Available</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
@@ -190,7 +212,6 @@ export default function Dashboard() {
                 <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent border-b border-border/60">
                     <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">Device</TableHead>
-                    <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Provider</TableHead>
                     <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-6">Capacity</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -212,11 +233,6 @@ export default function Dashboard() {
                             <span className="text-sm font-mono text-foreground/90 group-hover:text-primary transition-colors" data-testid={`text-phone-number-${phone.id}`}>{phone.phoneNumber}</span>
                             {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{phone.remark}</span>}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                           <Badge variant="secondary" className="font-normal text-[10px] text-muted-foreground/80 bg-muted/50 hover:bg-muted border-0">
-                            {phone.provider || "N/A"}
-                           </Badge>
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           <div className="flex flex-col items-end gap-1.5">
@@ -262,7 +278,14 @@ export default function Dashboard() {
                   <CardTitle className="text-base font-semibold tracking-tight">IP Utilization</CardTitle>
                 </div>
               </div>
-               <Badge variant="outline" className="bg-background font-mono text-xs">{filteredIps.length} IPs</Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-background font-mono text-xs">{filteredIps.length} IPs</Badge>
+                <ToggleGroup type="single" value={ipFilter} onValueChange={(v) => v && setIpFilter(v as any)} className="justify-start" aria-label="IP filter">
+                  <ToggleGroupItem value="all">All</ToggleGroupItem>
+                  <ToggleGroupItem value="used">Used</ToggleGroupItem>
+                  <ToggleGroupItem value="available">Available</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
@@ -333,34 +356,34 @@ export default function Dashboard() {
       </div>
 
       <Dialog open={isSlotDialogOpen} onOpenChange={setIsSlotDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>Create Allocation</DialogTitle>
             <DialogDescription>
               Allocate slots for a Phone and IP pair. STRICT LIMIT enforced (Max 4 slots / 15 days).
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-               <div className="grid gap-2">
-                <Label>Allocation Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={`w-full justify-start text-left font-normal ${!selectedDate && "text-muted-foreground"}`} data-testid="button-select-date">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+          <div className="grid gap-6 py-4 grid-cols-1 md:grid-cols-2">
+            <div className="grid gap-2">
+              <Label>Allocation Date</Label>
+              <div className="rounded-md border p-2">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-medium">
+                    {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                  </div>
+                  <div>
+                    <Button variant="outline" size="sm" onClick={() => setSelectedDate(undefined)}>Clear</Button>
+                  </div>
+                </div>
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                />
               </div>
+            </div>
+
+            <div>
               <div className="grid gap-2">
                 <Label htmlFor="count">Slot Count</Label>
                 <Input 
@@ -372,56 +395,56 @@ export default function Dashboard() {
                   data-testid="input-slot-count"
                 />
               </div>
-            </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="phone">Select Phone</Label>
-              <Select onValueChange={setSelectedPhoneId} value={selectedPhoneId}>
-                <SelectTrigger data-testid="select-phone">
-                  <SelectValue placeholder="Choose a phone..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {phones?.map(phone => {
-                    const usage = getPhoneSlotUsage(phone.id);
-                    const disabled = usage >= 4;
-                    return (
-                      <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
-                        <div className="flex justify-between items-center w-full min-w-[200px]">
-                          <span>{phone.phoneNumber}</span>
-                          <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                            ({usage}/4 used)
-                          </span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
+              <div className="grid gap-2 mt-4">
+                <Label htmlFor="phone">Select Phone</Label>
+                <Select onValueChange={setSelectedPhoneId} value={selectedPhoneId}>
+                  <SelectTrigger data-testid="select-phone">
+                    <SelectValue placeholder="Choose a phone..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {phones?.map(phone => {
+                      const usage = getPhoneSlotUsage(phone.id);
+                      const disabled = usage >= 4;
+                      return (
+                        <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
+                          <div className="flex justify-between items-center w-full min-w-[200px]">
+                            <span>{phone.phoneNumber}</span>
+                            <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                              ({usage}/4 used)
+                            </span>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="ip">Select IP Address</Label>
-              <Select onValueChange={setSelectedIpId} value={selectedIpId}>
-                <SelectTrigger data-testid="select-ip">
-                  <SelectValue placeholder="Choose an IP..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {ips?.map(ip => {
-                    const usage = getIpSlotUsage(ip.id);
-                    const disabled = usage >= 4;
-                    return (
-                      <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
-                         <div className="flex justify-between items-center w-full min-w-[200px]">
-                          <span>{ip.ipAddress}</span>
-                          <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                            ({usage}/4 used)
-                          </span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <div className="grid gap-2 mt-4">
+                <Label htmlFor="ip">Select IP Address</Label>
+                <Select onValueChange={setSelectedIpId} value={selectedIpId}>
+                  <SelectTrigger data-testid="select-ip">
+                    <SelectValue placeholder="Choose an IP..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ips?.map(ip => {
+                      const usage = getIpSlotUsage(ip.id);
+                      const disabled = usage >= 4;
+                      return (
+                        <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
+                           <div className="flex justify-between items-center w-full min-w-[200px]">
+                            <span>{ip.ipAddress}</span>
+                            <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                              ({usage}/4 used)
+                            </span>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>
