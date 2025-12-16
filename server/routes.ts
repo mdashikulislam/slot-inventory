@@ -180,7 +180,11 @@ export async function registerRoutes(
 
   app.post("/api/slots", async (req, res) => {
     try {
-      const data = insertSlotSchema.parse(req.body);
+      const body = { ...req.body };
+      if (body.usedAt && typeof body.usedAt === "string") {
+        body.usedAt = new Date(body.usedAt);
+      }
+      const data = insertSlotSchema.parse(body);
       const count = data.count ?? 1;
       
       // Check phone usage
