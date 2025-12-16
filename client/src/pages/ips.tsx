@@ -237,7 +237,7 @@ export default function IpsPage() {
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           isFull ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                         }`} data-testid={`badge-usage-${ip.id}`}>
-                          {usage}
+                          {usage} / 4
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground" data-testid={`text-remark-${ip.id}`}>{ip.remark || "-"}</TableCell>
