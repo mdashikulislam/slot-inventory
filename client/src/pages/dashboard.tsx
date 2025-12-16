@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
 import { useStore, Phone, IP } from "@/lib/store";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link2, Smartphone, Network, CheckCircle2, Search, Calendar as CalendarIcon, Filter, Trash2, X } from "lucide-react";
+import { Link2, Smartphone, Network, CheckCircle2, Search, Calendar as CalendarIcon, X, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -85,201 +85,187 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Overview of system resources and slot allocation.</p>
+          <p className="text-muted-foreground mt-1">Real-time system resource monitoring.</p>
         </div>
         <div className="flex gap-2">
            <div className="relative w-full md:w-64">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder="Search phones or IPs..." 
-              className="pl-8 bg-background" 
+              className="pl-8 bg-background h-9" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button onClick={() => setIsSlotDialogOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md">
+          <Button onClick={() => setIsSlotDialogOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md h-9">
             <Link2 className="mr-2 h-4 w-4" />
             Create Allocation
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="shadow-xs border-l-4 border-l-blue-500 bg-card/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Phones</CardTitle>
             <Smartphone className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalPhones}</div>
-            <p className="text-xs text-muted-foreground mt-1">Total devices</p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-indigo-500">
+        <Card className="shadow-xs border-l-4 border-l-indigo-500 bg-card/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total IPs</CardTitle>
             <Network className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalIps}</div>
-            <p className="text-xs text-muted-foreground mt-1">Total proxies</p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-green-500">
+        <Card className="shadow-xs border-l-4 border-l-green-500 bg-card/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Available Phones</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{availablePhones}</div>
-            <p className="text-xs text-muted-foreground mt-1">Devices with capacity</p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-teal-500">
+        <Card className="shadow-xs border-l-4 border-l-teal-500 bg-card/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Available IPs</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-teal-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{availableIps}</div>
-            <p className="text-xs text-muted-foreground mt-1">Proxies with capacity</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 h-[600px]">
+        {/* Compact Phone List */}
         <Card className="col-span-1 shadow-sm flex flex-col h-full overflow-hidden">
-          <CardHeader className="bg-muted/30 pb-4 border-b">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Phone Utilization</CardTitle>
-                <CardDescription>Usage per phone (Last 15 days)</CardDescription>
-              </div>
-              <Badge variant="outline" className="bg-background">{filteredPhones.length} Devices</Badge>
+          <CardHeader className="bg-muted/30 pb-2 py-2 border-b min-h-[48px] flex justify-center">
+            <div className="flex items-center justify-between w-full">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Smartphone className="h-4 w-4" />
+                Phone Utilization
+              </CardTitle>
+              <Badge variant="secondary" className="text-xs font-normal h-6">{filteredPhones.length} Devices</Badge>
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
             <ScrollArea className="h-full">
-              <div className="divide-y divide-border">
-                {filteredPhones.map(phone => {
-                  const usage = getPhoneSlotUsage(phone.id);
-                  const percentage = Math.min((usage / 4) * 100, 100);
-                  const isOverLimit = usage >= 4;
-                  
-                  // Get last used date
-                  const lastSlot = slots
-                    .filter(s => s.phoneId === phone.id)
-                    .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())[0];
+              <Table>
+                <TableHeader className="bg-muted/10 sticky top-0 z-10 shadow-sm">
+                  <TableRow className="h-8 hover:bg-muted/10">
+                    <TableHead className="w-[140px] text-xs h-8 font-semibold text-foreground/80">Phone Number</TableHead>
+                    <TableHead className="text-xs h-8 font-semibold text-foreground/80">Provider</TableHead>
+                    <TableHead className="text-xs text-right h-8 font-semibold text-foreground/80">Usage</TableHead>
+                    <TableHead className="w-[40px] h-8"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredPhones.map(phone => {
+                    const usage = getPhoneSlotUsage(phone.id);
+                    const isOverLimit = usage >= 4;
+                    const percentage = Math.min((usage / 4) * 100, 100);
 
-                  return (
-                    <div 
-                      key={phone.id} 
-                      className="p-4 hover:bg-muted/20 transition-colors cursor-pointer group"
-                      onClick={() => setDetailPhone(phone)}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <div className="font-semibold text-sm group-hover:text-primary transition-colors">{phone.phoneNumber}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                            <span>{phone.provider || "Unknown Provider"}</span>
-                            {lastSlot && (
-                              <>
-                                <span>•</span>
-                                <span>Last: {format(new Date(lastSlot.usedAt), "MMM d")}</span>
-                              </>
-                            )}
+                    return (
+                      <TableRow 
+                        key={phone.id} 
+                        className="cursor-pointer hover:bg-muted/50 h-8 border-b border-muted/40 transition-colors"
+                        onClick={() => setDetailPhone(phone)}
+                      >
+                        <TableCell className="font-medium text-xs py-0 h-8 align-middle">{phone.phoneNumber}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground py-0 h-8 align-middle truncate max-w-[100px]">{phone.provider || "-"}</TableCell>
+                        <TableCell className="text-right py-0 h-8 align-middle">
+                          <div className="flex items-center justify-end gap-2">
+                             <div className="w-16 h-1.5 bg-secondary rounded-full overflow-hidden">
+                                <div className={`h-full ${isOverLimit ? 'bg-destructive' : 'bg-primary'}`} style={{ width: `${percentage}%` }} />
+                             </div>
+                             <span className={`text-[10px] w-6 ${isOverLimit ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>{usage}/4</span>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`text-sm font-bold ${isOverLimit ? "text-destructive" : "text-foreground"}`}>
-                            {usage} Used
-                          </span>
-                        </div>
-                      </div>
-                      <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${isOverLimit ? 'bg-destructive' : 'bg-primary'}`} 
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredPhones.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                    <Smartphone className="h-8 w-8 mb-2 opacity-20" />
-                    <p className="text-sm">No phones found matching your search.</p>
-                  </div>
-                )}
-              </div>
+                        </TableCell>
+                         <TableCell className="py-0 h-8 align-middle text-right pr-2">
+                            <Search className="h-3 w-3 text-muted-foreground/50" />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {filteredPhones.length === 0 && (
+                     <TableRow>
+                       <TableCell colSpan={4} className="h-24 text-center text-xs text-muted-foreground">
+                         No phones found.
+                       </TableCell>
+                     </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </ScrollArea>
           </CardContent>
         </Card>
 
+        {/* Compact IP List */}
         <Card className="col-span-1 shadow-sm flex flex-col h-full overflow-hidden">
-          <CardHeader className="bg-muted/30 pb-4 border-b">
-            <div className="flex items-center justify-between">
-               <div>
-                <CardTitle>IP Utilization</CardTitle>
-                <CardDescription>Usage per IP (Last 15 days)</CardDescription>
-              </div>
-              <Badge variant="outline" className="bg-background">{filteredIps.length} IPs</Badge>
+          <CardHeader className="bg-muted/30 pb-2 py-2 border-b min-h-[48px] flex justify-center">
+            <div className="flex items-center justify-between w-full">
+               <CardTitle className="text-base flex items-center gap-2">
+                 <Network className="h-4 w-4" />
+                 IP Utilization
+               </CardTitle>
+               <Badge variant="secondary" className="text-xs font-normal h-6">{filteredIps.length} IPs</Badge>
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
              <ScrollArea className="h-full">
-              <div className="divide-y divide-border">
-                {filteredIps.map(ip => {
-                  const usage = getIpSlotUsage(ip.id);
-                  const percentage = Math.min((usage / 4) * 100, 100);
-                  const isOverLimit = usage >= 4;
+              <Table>
+                <TableHeader className="bg-muted/10 sticky top-0 z-10 shadow-sm">
+                  <TableRow className="h-8 hover:bg-muted/10">
+                    <TableHead className="w-[140px] text-xs h-8 font-semibold text-foreground/80">IP Address</TableHead>
+                    <TableHead className="text-xs h-8 font-semibold text-foreground/80">Provider</TableHead>
+                    <TableHead className="text-xs text-right h-8 font-semibold text-foreground/80">Usage</TableHead>
+                    <TableHead className="w-[40px] h-8"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredIps.map(ip => {
+                    const usage = getIpSlotUsage(ip.id);
+                    const isOverLimit = usage >= 4;
+                    const percentage = Math.min((usage / 4) * 100, 100);
 
-                  // Get last used date
-                  const lastSlot = slots
-                    .filter(s => s.ipId === ip.id)
-                    .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())[0];
-
-                  return (
-                    <div 
-                      key={ip.id} 
-                      className="p-4 hover:bg-muted/20 transition-colors cursor-pointer group"
-                      onClick={() => setDetailIp(ip)}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <div className="font-semibold text-sm font-mono group-hover:text-primary transition-colors">{ip.ipAddress}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                            <span>{ip.provider || "Unknown Provider"}</span>
-                             {lastSlot && (
-                              <>
-                                <span>•</span>
-                                <span>Last: {format(new Date(lastSlot.usedAt), "MMM d")}</span>
-                              </>
-                            )}
+                    return (
+                      <TableRow 
+                        key={ip.id} 
+                        className="cursor-pointer hover:bg-muted/50 h-8 border-b border-muted/40 transition-colors"
+                        onClick={() => setDetailIp(ip)}
+                      >
+                        <TableCell className="font-mono text-[11px] py-0 h-8 align-middle">{ip.ipAddress}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground py-0 h-8 align-middle truncate max-w-[100px]">{ip.provider || "-"}</TableCell>
+                         <TableCell className="text-right py-0 h-8 align-middle">
+                          <div className="flex items-center justify-end gap-2">
+                             <div className="w-16 h-1.5 bg-secondary rounded-full overflow-hidden">
+                                <div className={`h-full ${isOverLimit ? 'bg-destructive' : 'bg-primary'}`} style={{ width: `${percentage}%` }} />
+                             </div>
+                             <span className={`text-[10px] w-6 ${isOverLimit ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>{usage}/4</span>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`text-sm font-bold ${isOverLimit ? "text-destructive" : "text-foreground"}`}>
-                            {usage} Used
-                          </span>
-                        </div>
-                      </div>
-                      <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-500 ${isOverLimit ? 'bg-destructive' : 'bg-primary'}`} 
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-                 {filteredIps.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                    <Network className="h-8 w-8 mb-2 opacity-20" />
-                    <p className="text-sm">No IPs found matching your search.</p>
-                  </div>
-                )}
-              </div>
+                        </TableCell>
+                        <TableCell className="py-0 h-8 align-middle text-right pr-2">
+                            <Search className="h-3 w-3 text-muted-foreground/50" />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {filteredIps.length === 0 && (
+                     <TableRow>
+                       <TableCell colSpan={4} className="h-24 text-center text-xs text-muted-foreground">
+                         No IPs found.
+                       </TableCell>
+                     </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </ScrollArea>
           </CardContent>
         </Card>
@@ -290,7 +276,7 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>Create Allocation</DialogTitle>
             <DialogDescription>
-              Allocate slots for a Phone and IP pair. Overriding limits is permitted.
+              Allocate slots for a Phone and IP pair. STRICT LIMIT enforced (Max 4 slots / 15 days).
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-6 py-4">
@@ -335,12 +321,13 @@ export default function Dashboard() {
                 <SelectContent>
                   {phones.map(phone => {
                     const usage = getPhoneSlotUsage(phone.id);
+                    const disabled = usage >= 4;
                     return (
-                      <SelectItem key={phone.id} value={phone.id}>
+                      <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
                         <div className="flex justify-between items-center w-full min-w-[200px]">
                           <span>{phone.phoneNumber}</span>
-                          <span className={`text-xs ml-2 ${usage >= 4 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                            ({usage} used)
+                          <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                            ({usage}/4 used)
                           </span>
                         </div>
                       </SelectItem>
@@ -359,12 +346,13 @@ export default function Dashboard() {
                 <SelectContent>
                   {ips.map(ip => {
                     const usage = getIpSlotUsage(ip.id);
+                    const disabled = usage >= 4;
                     return (
-                      <SelectItem key={ip.id} value={ip.id}>
+                      <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
                          <div className="flex justify-between items-center w-full min-w-[200px]">
                           <span>{ip.ipAddress}</span>
-                          <span className={`text-xs ml-2 ${usage >= 4 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                            ({usage} used)
+                          <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                            ({usage}/4 used)
                           </span>
                         </div>
                       </SelectItem>
@@ -373,16 +361,6 @@ export default function Dashboard() {
                 </SelectContent>
               </Select>
             </div>
-            
-            {(selectedPhoneId || selectedIpId) && (
-              <div className="bg-muted/50 p-3 rounded-md text-xs text-muted-foreground flex gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>
-                  Allocation will add <strong>{slotCount}</strong> slot(s) to the selected resources.
-                  Limits are monitored but not blocked.
-                </span>
-              </div>
-            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsSlotDialogOpen(false)}>Cancel</Button>
@@ -397,23 +375,23 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>Phone Usage Details</DialogTitle>
             <DialogDescription>
-              {detailPhone?.phoneNumber} ({detailPhone?.provider})
+              {detailPhone?.phoneNumber}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
+          <div className="py-2">
              <Table>
                <TableHeader>
-                 <TableRow>
-                   <TableHead>IP Address</TableHead>
-                   <TableHead>Date</TableHead>
-                   <TableHead className="text-right">Slots</TableHead>
-                   <TableHead className="w-[50px]"></TableHead>
+                 <TableRow className="h-8">
+                   <TableHead className="h-8 text-xs">IP Address</TableHead>
+                   <TableHead className="h-8 text-xs">Date</TableHead>
+                   <TableHead className="text-right h-8 text-xs">Slots</TableHead>
+                   <TableHead className="w-[40px] h-8"></TableHead>
                  </TableRow>
                </TableHeader>
                <TableBody>
                  {detailPhone && slots.filter(s => s.phoneId === detailPhone.id).length === 0 && (
                    <TableRow>
-                     <TableCell colSpan={4} className="text-center text-muted-foreground py-4">No active allocations</TableCell>
+                     <TableCell colSpan={4} className="text-center text-muted-foreground py-4 text-xs">No active allocations</TableCell>
                    </TableRow>
                  )}
                  {detailPhone && slots
@@ -422,13 +400,13 @@ export default function Dashboard() {
                    .map(slot => {
                      const ip = ips.find(i => i.id === slot.ipId);
                      return (
-                       <TableRow key={slot.id}>
-                         <TableCell className="font-mono text-xs">{ip?.ipAddress || "Unknown IP"}</TableCell>
-                         <TableCell>{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
-                         <TableCell className="text-right font-bold">{slot.count || 1}</TableCell>
-                         <TableCell>
+                       <TableRow key={slot.id} className="h-9">
+                         <TableCell className="font-mono text-xs py-1">{ip?.ipAddress || "Unknown IP"}</TableCell>
+                         <TableCell className="text-xs py-1">{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
+                         <TableCell className="text-right font-bold text-xs py-1">{slot.count || 1}</TableCell>
+                         <TableCell className="py-1">
                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteSlot(slot.id)}>
-                             <X className="h-4 w-4" />
+                             <X className="h-3 w-3" />
                            </Button>
                          </TableCell>
                        </TableRow>
@@ -446,23 +424,23 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>IP Usage Details</DialogTitle>
             <DialogDescription>
-              {detailIp?.ipAddress} ({detailIp?.provider})
+              {detailIp?.ipAddress}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
+          <div className="py-2">
              <Table>
                <TableHeader>
-                 <TableRow>
-                   <TableHead>Phone Number</TableHead>
-                   <TableHead>Date</TableHead>
-                   <TableHead className="text-right">Slots</TableHead>
-                   <TableHead className="w-[50px]"></TableHead>
+                 <TableRow className="h-8">
+                   <TableHead className="h-8 text-xs">Phone Number</TableHead>
+                   <TableHead className="h-8 text-xs">Date</TableHead>
+                   <TableHead className="text-right h-8 text-xs">Slots</TableHead>
+                   <TableHead className="w-[40px] h-8"></TableHead>
                  </TableRow>
                </TableHeader>
                <TableBody>
                  {detailIp && slots.filter(s => s.ipId === detailIp.id).length === 0 && (
                    <TableRow>
-                     <TableCell colSpan={4} className="text-center text-muted-foreground py-4">No active allocations</TableCell>
+                     <TableCell colSpan={4} className="text-center text-muted-foreground py-4 text-xs">No active allocations</TableCell>
                    </TableRow>
                  )}
                  {detailIp && slots
@@ -471,13 +449,13 @@ export default function Dashboard() {
                    .map(slot => {
                      const phone = phones.find(p => p.id === slot.phoneId);
                      return (
-                       <TableRow key={slot.id}>
-                         <TableCell>{phone?.phoneNumber || "Unknown Phone"}</TableCell>
-                         <TableCell>{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
-                         <TableCell className="text-right font-bold">{slot.count || 1}</TableCell>
-                         <TableCell>
+                       <TableRow key={slot.id} className="h-9">
+                         <TableCell className="text-xs py-1">{phone?.phoneNumber || "Unknown Phone"}</TableCell>
+                         <TableCell className="text-xs py-1">{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
+                         <TableCell className="text-right font-bold text-xs py-1">{slot.count || 1}</TableCell>
+                         <TableCell className="py-1">
                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteSlot(slot.id)}>
-                             <X className="h-4 w-4" />
+                             <X className="h-3 w-3" />
                            </Button>
                          </TableCell>
                        </TableRow>

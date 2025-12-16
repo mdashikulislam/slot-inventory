@@ -28,7 +28,7 @@ export interface Slot {
   id: string;
   phoneId: string;
   ipId: string;
-  count: number; // Added count field
+  count: number;
   usedAt: string;
 }
 
@@ -84,6 +84,32 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem("slot-manager-data", JSON.stringify(state));
   }, [state]);
+
+  // Auto-cleanup expired slots logic
+  // Runs on mount and every minute to ensure "auto remove without cronjob" feel
+  useEffect(() => {
+    const cleanupExpiredSlots = () => {
+      const cutoff = subDays(new Date(), 15);
+      
+      setState(prev => {
+        const activeSlots = prev.slots.filter(s => {
+          // Keep slot if usedAt is AFTER the cutoff (used within last 15 days)
+          return isAfter(parseISO(s.usedAt), cutoff);
+        });
+
+        // Only update state if something changed to avoid re-renders
+        if (activeSlots.length !== prev.slots.length) {
+          return { ...prev, slots: activeSlots };
+        }
+        return prev;
+      });
+    };
+
+    cleanupExpiredSlots(); // Run immediately on load
+    const intervalId = setInterval(cleanupExpiredSlots, 60 * 1000); // Run every minute
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   const login = () => setState(prev => ({ ...prev, isAuthenticated: true }));
   const logout = () => setState(prev => ({ ...prev, isAuthenticated: false }));
@@ -149,6 +175,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addSlot = (phoneId: string, ipId: string, count: number, date: Date) => {
+    // STRICT Validation: Prevent if (current usage + new input) > 4
+    const currentPhoneUsage = getPhoneSlotUsage(phoneId);
+    const currentIpUsage = getIpSlotUsage(ipId);
+
+    if (currentPhoneUsage + count > 4) {
+      return { 
+        success: false, 
+        error: `Allocation blocked. Phone would exceed limit (Current: ${currentPhoneUsage}, Adding: ${count}, Limit: 4)` 
+      };
+    }
+    if (currentIpUsage + count > 4) {
+      return { 
+        success: false, 
+        error: `Allocation blocked. IP would exceed limit (Current: ${currentIpUsage}, Adding: ${count}, Limit: 4)` 
+      };
+    }
+
     const newSlot: Slot = {
       id: nanoid(),
       phoneId,
