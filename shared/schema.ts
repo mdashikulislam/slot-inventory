@@ -21,8 +21,8 @@ export const phones = pgTable("phones", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   phoneNumber: text("phone_number").notNull().unique(),
   email: text("email").notNull(),
-  provider: text("provider"),
-  remark: text("remark"),
+  provider: text("provider").default(""),
+  remark: text("remark").default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -37,11 +37,11 @@ export type Phone = typeof phones.$inferSelect;
 export const ips = pgTable("ips", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ipAddress: text("ip_address").notNull().unique(),
-  port: text("port"),
-  username: text("username"),
-  password: text("password"),
-  provider: text("provider"),
-  remark: text("remark"),
+  port: text("port").default(""),
+  username: text("username").default(""),
+  password: text("password").default(""),
+  provider: text("provider").default(""),
+  remark: text("remark").default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

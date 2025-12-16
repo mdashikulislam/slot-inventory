@@ -181,20 +181,21 @@ export async function registerRoutes(
   app.post("/api/slots", async (req, res) => {
     try {
       const data = insertSlotSchema.parse(req.body);
+      const count = data.count ?? 1;
       
       // Check phone usage
       const phoneUsage = await storage.getPhoneSlotUsage(data.phoneId);
-      if (phoneUsage + data.count > 4) {
+      if (phoneUsage + count > 4) {
         return res.status(400).json({ 
-          error: `Allocation blocked. Phone would exceed limit (Current: ${phoneUsage}, Adding: ${data.count}, Limit: 4)` 
+          error: `Allocation blocked. Phone would exceed limit (Current: ${phoneUsage}, Adding: ${count}, Limit: 4)` 
         });
       }
 
       // Check IP usage
       const ipUsage = await storage.getIpSlotUsage(data.ipId);
-      if (ipUsage + data.count > 4) {
+      if (ipUsage + count > 4) {
         return res.status(400).json({ 
-          error: `Allocation blocked. IP would exceed limit (Current: ${ipUsage}, Adding: ${data.count}, Limit: 4)` 
+          error: `Allocation blocked. IP would exceed limit (Current: ${ipUsage}, Adding: ${count}, Limit: 4)` 
         });
       }
 

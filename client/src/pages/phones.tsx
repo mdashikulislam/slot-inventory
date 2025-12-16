@@ -1,36 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
-import { useStore, Phone } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Plus, Pencil, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { insertPhoneSchema } from "@shared/schema";
+import type { InsertPhone, Phone } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const phoneSchema = z.object({
-  phoneNumber: z.string().min(3, "Phone number is required"),
-  email: z.string().optional(),
-  provider: z.string().optional(),
-  remark: z.string().optional(),
-});
-
-type PhoneFormValues = z.infer<typeof phoneSchema>;
+import { usePhones, useCreatePhone, useUpdatePhone, useDeletePhone, usePhoneSlotUsage } from "@/hooks/use-data";
+import { useSlots } from "@/hooks/use-data";
 
 export default function PhonesPage() {
-  const { phones, addPhone, updatePhone, deletePhone, getPhoneSlotUsage } = useStore();
+  const { data: phones = [], isLoading } = usePhones();
+  const { data: slots = [] } = useSlots();
+  const createPhone = useCreatePhone();
+  const updatePhone = useUpdatePhone();
+  const deletePhone = useDeletePhone();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const form = useForm<PhoneFormValues>({
-    resolver: zodResolver(phoneSchema),
+  const form = useForm<InsertPhone>({
+    resolver: zodResolver(insertPhoneSchema),
     defaultValues: {
       phoneNumber: "",
       email: "",
@@ -39,18 +36,13 @@ export default function PhonesPage() {
     },
   });
 
-  const onSubmit = (data: PhoneFormValues) => {
+  const onSubmit = async (data: InsertPhone) => {
     try {
       if (editingId) {
-        updatePhone(editingId, data);
+        await updatePhone.mutateAsync({ id: editingId, data });
         toast.success("Phone updated successfully");
       } else {
-        addPhone({
-          phoneNumber: data.phoneNumber,
-          email: data.email || "", // Ensure string
-          provider: data.provider,
-          remark: data.remark,
-        });
+        await createPhone.mutateAsync(data);
         toast.success("Phone added successfully");
       }
       setIsDialogOpen(false);
@@ -72,10 +64,14 @@ export default function PhonesPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this phone? All associated slots will be removed.")) {
-      deletePhone(id);
-      toast.success("Phone deleted");
+      try {
+        await deletePhone.mutateAsync(id);
+        toast.success("Phone deleted");
+      } catch (error: any) {
+        toast.error(error.message);
+      }
     }
   };
 
@@ -90,14 +86,33 @@ export default function PhonesPage() {
     setIsDialogOpen(true);
   };
 
+  const getPhoneSlotUsage = (phoneId: string) => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 15);
+    
+    return slots
+      .filter(s => s.phoneId === phoneId && new Date(s.usedAt) > cutoff)
+      .reduce((acc, curr) => acc + (curr.count || 1), 0);
+  };
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Phones Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight" data-testid="heading-phones">Phones Management</h1>
           <p className="text-muted-foreground mt-1">Add, edit, and manage phone numbers in the system.</p>
         </div>
-        <Button onClick={openAddDialog} className="bg-primary text-primary-foreground">
+        <Button onClick={openAddDialog} className="bg-primary text-primary-foreground" data-testid="button-add-phone">
           <Plus className="mr-2 h-4 w-4" /> Add Phone
         </Button>
       </div>
@@ -129,31 +144,31 @@ export default function PhonesPage() {
                 phones.map((phone) => {
                    const usage = getPhoneSlotUsage(phone.id);
                    return (
-                    <TableRow key={phone.id}>
-                      <TableCell className="font-medium">{phone.phoneNumber}</TableCell>
-                      <TableCell>{phone.email || "-"}</TableCell>
-                      <TableCell>{phone.provider || "-"}</TableCell>
+                    <TableRow key={phone.id} data-testid={`row-phone-${phone.id}`}>
+                      <TableCell className="font-medium" data-testid={`text-phone-number-${phone.id}`}>{phone.phoneNumber}</TableCell>
+                      <TableCell data-testid={`text-email-${phone.id}`}>{phone.email || "-"}</TableCell>
+                      <TableCell data-testid={`text-provider-${phone.id}`}>{phone.provider || "-"}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           usage >= 4 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        }`}>
+                        }`} data-testid={`badge-usage-${phone.id}`}>
                           {usage} / 4
                         </span>
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-muted-foreground">{phone.remark || "-"}</TableCell>
+                      <TableCell className="max-w-[200px] truncate text-muted-foreground" data-testid={`text-remark-${phone.id}`}>{phone.remark || "-"}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button variant="ghost" className="h-8 w-8 p-0" data-testid={`button-menu-${phone.id}`}>
                               <span className="sr-only">Open menu</span>
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEdit(phone)}>
+                            <DropdownMenuItem onClick={() => handleEdit(phone)} data-testid={`button-edit-${phone.id}`}>
                               <Pencil className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(phone.id)} className="text-destructive focus:text-destructive">
+                            <DropdownMenuItem onClick={() => handleDelete(phone.id)} className="text-destructive focus:text-destructive" data-testid={`button-delete-${phone.id}`}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -182,7 +197,7 @@ export default function PhonesPage() {
                   <FormItem>
                     <FormLabel>Phone Number <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input placeholder="+1234567890" {...field} />
+                      <Input placeholder="+1234567890" {...field} data-testid="input-phone-number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -193,9 +208,9 @@ export default function PhonesPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>Email <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input placeholder="user@example.com" {...field} />
+                      <Input placeholder="user@example.com" {...field} data-testid="input-email" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -209,7 +224,7 @@ export default function PhonesPage() {
                     <FormItem>
                       <FormLabel>Provider</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. AT&T" {...field} />
+                        <Input placeholder="e.g. AT&T" {...field} data-testid="input-provider" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -223,15 +238,17 @@ export default function PhonesPage() {
                   <FormItem>
                     <FormLabel>Remark</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional notes..." {...field} />
+                      <Input placeholder="Optional notes..." {...field} data-testid="input-remark" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit">{editingId ? "Save Changes" : "Add Phone"}</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel">Cancel</Button>
+                <Button type="submit" disabled={createPhone.isPending || updatePhone.isPending} data-testid="button-submit">
+                  {createPhone.isPending || updatePhone.isPending ? "Saving..." : editingId ? "Save Changes" : "Add Phone"}
+                </Button>
               </DialogFooter>
             </form>
           </Form>

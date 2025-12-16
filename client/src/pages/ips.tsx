@@ -1,41 +1,35 @@
 import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
-import { useStore, IP } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Plus, Pencil, Trash2, Download, Search, CheckCircle, XCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { insertIpSchema } from "@shared/schema";
+import type { InsertIp, Ip } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-
-const ipSchema = z.object({
-  ipAddress: z.string().min(7, "Valid IP address is required"),
-  port: z.string().optional(),
-  username: z.string().optional(),
-  password: z.string().optional(),
-  provider: z.string().optional(),
-  remark: z.string().optional(),
-});
-
-type IpFormValues = z.infer<typeof ipSchema>;
+import { useIps, useCreateIp, useUpdateIp, useDeleteIp, useSlots } from "@/hooks/use-data";
 
 export default function IpsPage() {
-  const { ips, addIp, updateIp, deleteIp, getIpSlotUsage } = useStore();
+  const { data: ips = [], isLoading } = useIps();
+  const { data: slots = [] } = useSlots();
+  const createIp = useCreateIp();
+  const updateIp = useUpdateIp();
+  const deleteIp = useDeleteIp();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "available">("all");
 
-  const form = useForm<IpFormValues>({
-    resolver: zodResolver(ipSchema),
+  const form = useForm<InsertIp>({
+    resolver: zodResolver(insertIpSchema),
     defaultValues: {
       ipAddress: "",
       port: "",
@@ -46,13 +40,13 @@ export default function IpsPage() {
     },
   });
 
-  const onSubmit = (data: IpFormValues) => {
+  const onSubmit = async (data: InsertIp) => {
     try {
       if (editingId) {
-        updateIp(editingId, data);
+        await updateIp.mutateAsync({ id: editingId, data });
         toast.success("IP updated successfully");
       } else {
-        addIp(data);
+        await createIp.mutateAsync(data);
         toast.success("IP added successfully");
       }
       setIsDialogOpen(false);
@@ -63,7 +57,7 @@ export default function IpsPage() {
     }
   };
 
-  const handleEdit = (ip: IP) => {
+  const handleEdit = (ip: Ip) => {
     setEditingId(ip.id);
     form.reset({
       ipAddress: ip.ipAddress,
@@ -76,10 +70,14 @@ export default function IpsPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this IP? All associated slots will be removed.")) {
-      deleteIp(id);
-      toast.success("IP deleted");
+      try {
+        await deleteIp.mutateAsync(id);
+        toast.success("IP deleted");
+      } catch (error: any) {
+        toast.error(error.message);
+      }
     }
   };
 
@@ -96,7 +94,15 @@ export default function IpsPage() {
     setIsDialogOpen(true);
   };
 
-  // Filter Logic
+  const getIpSlotUsage = (ipId: string) => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 15);
+    
+    return slots
+      .filter(s => s.ipId === ipId && new Date(s.usedAt) > cutoff)
+      .reduce((acc, curr) => acc + (curr.count || 1), 0);
+  };
+
   const filteredIps = useMemo(() => {
     return ips.filter(ip => {
       const matchesSearch = 
@@ -109,11 +115,9 @@ export default function IpsPage() {
 
       return matchesSearch && matchesFilter;
     });
-  }, [ips, searchQuery, filterType, getIpSlotUsage]);
+  }, [ips, searchQuery, filterType, slots]);
 
-  // TXT Export Logic
   const handleExport = () => {
-    // Format: ip:port:username:password
     const lines = filteredIps.map(ip => {
       const parts = [
         ip.ipAddress,
@@ -121,11 +125,6 @@ export default function IpsPage() {
         ip.username || "",
         ip.password || ""
       ];
-      // Filter out empty strings only if you want compact format, but usually strict format keeps delimiters
-      // "ip:port:username:password" -> "1.1.1.1:8080:user:pass"
-      // If parts are missing, we still keep the colons? e.g. "1.1.1.1:::".
-      // Let's assume standard proxy format which usually keeps colons or drops if empty at end.
-      // Let's keep it strict: ip:port:username:password
       return parts.join(":");
     });
 
@@ -143,15 +142,25 @@ export default function IpsPage() {
     toast.success(`Exported ${filteredIps.length} IPs to TXT`);
   };
 
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">IP Address Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight" data-testid="heading-ips">IP Address Management</h1>
           <p className="text-muted-foreground mt-1">Manage proxies and IP addresses.</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <Button onClick={openAddDialog} className="bg-primary text-primary-foreground">
+          <Button onClick={openAddDialog} className="bg-primary text-primary-foreground" data-testid="button-add-ip">
             <Plus className="mr-2 h-4 w-4" /> Add IP
           </Button>
         </div>
@@ -169,18 +178,19 @@ export default function IpsPage() {
                   className="pl-8" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  data-testid="input-search"
                 />
               </div>
               <ToggleGroup type="single" value={filterType} onValueChange={(v) => v && setFilterType(v as any)} className="justify-start">
-                <ToggleGroupItem value="all" aria-label="All IPs">
+                <ToggleGroupItem value="all" aria-label="All IPs" data-testid="toggle-all">
                   All
                 </ToggleGroupItem>
-                <ToggleGroupItem value="available" aria-label="Available IPs">
+                <ToggleGroupItem value="available" aria-label="Available IPs" data-testid="toggle-available">
                   <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
                   Available
                 </ToggleGroupItem>
               </ToggleGroup>
-              <Button variant="outline" onClick={handleExport} title="Export TXT">
+              <Button variant="outline" onClick={handleExport} title="Export TXT" data-testid="button-export">
                 <Download className="h-4 w-4 mr-2" />
                 Export .txt
               </Button>
@@ -214,36 +224,36 @@ export default function IpsPage() {
                   const usage = getIpSlotUsage(ip.id);
                   const isFull = usage >= 4;
                   return (
-                    <TableRow key={ip.id} className={isFull ? "bg-muted/10" : ""}>
-                      <TableCell className="font-medium font-mono text-xs md:text-sm">
+                    <TableRow key={ip.id} className={isFull ? "bg-muted/10" : ""} data-testid={`row-ip-${ip.id}`}>
+                      <TableCell className="font-medium font-mono text-xs md:text-sm" data-testid={`text-ip-${ip.id}`}>
                         <div className="flex items-center gap-2">
                           {isFull ? <XCircle className="h-3 w-3 text-red-500" /> : <CheckCircle className="h-3 w-3 text-green-500" />}
                           {ip.ipAddress}
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs md:text-sm">{ip.port || "-"}</TableCell>
-                      <TableCell>{ip.provider || "-"}</TableCell>
+                      <TableCell className="font-mono text-xs md:text-sm" data-testid={`text-port-${ip.id}`}>{ip.port || "-"}</TableCell>
+                      <TableCell data-testid={`text-provider-${ip.id}`}>{ip.provider || "-"}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           isFull ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        }`}>
+                        }`} data-testid={`badge-usage-${ip.id}`}>
                           {usage}
                         </span>
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-muted-foreground">{ip.remark || "-"}</TableCell>
+                      <TableCell className="max-w-[200px] truncate text-muted-foreground" data-testid={`text-remark-${ip.id}`}>{ip.remark || "-"}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button variant="ghost" className="h-8 w-8 p-0" data-testid={`button-menu-${ip.id}`}>
                               <span className="sr-only">Open menu</span>
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEdit(ip)}>
+                            <DropdownMenuItem onClick={() => handleEdit(ip)} data-testid={`button-edit-${ip.id}`}>
                               <Pencil className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(ip.id)} className="text-destructive focus:text-destructive">
+                            <DropdownMenuItem onClick={() => handleDelete(ip.id)} className="text-destructive focus:text-destructive" data-testid={`button-delete-${ip.id}`}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -273,7 +283,7 @@ export default function IpsPage() {
                     <FormItem>
                       <FormLabel>IP Address <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="192.168.1.1" className="font-mono" {...field} />
+                        <Input placeholder="192.168.1.1" className="font-mono" {...field} data-testid="input-ip-address" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -286,7 +296,7 @@ export default function IpsPage() {
                     <FormItem>
                       <FormLabel>Port</FormLabel>
                       <FormControl>
-                        <Input placeholder="8080" className="font-mono" {...field} />
+                        <Input placeholder="8080" className="font-mono" {...field} data-testid="input-port" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -301,7 +311,7 @@ export default function IpsPage() {
                     <FormItem>
                       <FormLabel>Username</FormLabel>
                       <FormControl>
-                        <Input placeholder="proxy-user" {...field} />
+                        <Input placeholder="proxy-user" {...field} data-testid="input-username" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -314,7 +324,7 @@ export default function IpsPage() {
                     <FormItem>
                       <FormLabel>Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••" {...field} />
+                        <Input type="password" placeholder="••••••" {...field} data-testid="input-password" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -328,7 +338,7 @@ export default function IpsPage() {
                   <FormItem>
                     <FormLabel>Provider</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. AWS" {...field} />
+                      <Input placeholder="e.g. AWS" {...field} data-testid="input-provider" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -341,15 +351,17 @@ export default function IpsPage() {
                   <FormItem>
                     <FormLabel>Remark</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional notes..." {...field} />
+                      <Input placeholder="Optional notes..." {...field} data-testid="input-remark" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit">{editingId ? "Save Changes" : "Add IP"}</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel">Cancel</Button>
+                <Button type="submit" disabled={createIp.isPending || updateIp.isPending} data-testid="button-submit">
+                  {createIp.isPending || updateIp.isPending ? "Saving..." : editingId ? "Save Changes" : "Add IP"}
+                </Button>
               </DialogFooter>
             </form>
           </Form>
