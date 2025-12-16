@@ -105,9 +105,7 @@ export default function Dashboard() {
   const filteredPhones = useMemo(() => {
     if (!phones) return [];
     return phones
-      .filter(p =>
-        p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      .filter(p => p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()))
       .filter(p => {
         const usage = getPhoneSlotUsage(p.id);
         if (phoneFilter === "available") return usage < 4;
@@ -252,11 +250,11 @@ export default function Dashboard() {
                   })}
                   {filteredPhones.length === 0 && (
                      <TableRow>
-                       <TableCell colSpan={3} className="h-32 text-center">
-                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                           <Smartphone className="h-8 w-8 opacity-20" />
-                           <span className="text-sm">No phones found</span>
-                         </div>
+                       <TableCell colSpan={2} className="h-32 text-center">
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <Smartphone className="h-8 w-8 opacity-20" />
+                            <span className="text-sm">No phones found</span>
+                          </div>
                        </TableCell>
                      </TableRow>
                   )}

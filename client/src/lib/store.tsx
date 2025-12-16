@@ -8,7 +8,6 @@ export interface Phone {
   id: string;
   phoneNumber: string;
   email: string;
-  provider?: string;
   remark?: string;
   createdAt: string;
 }
@@ -59,8 +58,8 @@ interface StoreContextType extends AppState {
 
 const INITIAL_STATE: AppState = {
   phones: [
-    { id: "p1", phoneNumber: "+15550101", email: "demo1@example.com", provider: "Verizon", remark: "Primary demo phone", createdAt: new Date().toISOString() },
-    { id: "p2", phoneNumber: "+15550102", email: "demo2@example.com", provider: "AT&T", remark: "", createdAt: new Date().toISOString() },
+    { id: "p1", phoneNumber: "+15550101", email: "demo1@example.com", remark: "Primary demo phone", createdAt: new Date().toISOString() },
+    { id: "p2", phoneNumber: "+15550102", email: "demo2@example.com", remark: "", createdAt: new Date().toISOString() },
   ],
   ips: [
     { id: "i1", ipAddress: "192.168.1.101", provider: "AWS", remark: "US East Proxy", createdAt: new Date().toISOString() },
