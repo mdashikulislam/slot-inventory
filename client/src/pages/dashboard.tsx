@@ -1,22 +1,21 @@
 import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
 import { usePhones, useIps, useSlots, useCreateSlot, useDeleteSlot } from "@/hooks/use-data";
-import type { Phone, Ip, Slot } from "@shared/schema";
+import type { Phone, Ip } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link2, Smartphone, Network, CheckCircle2, Search, Calendar as CalendarIcon, X, MoreHorizontal, ArrowUpRight, Activity } from "lucide-react";
+import { Link2, Smartphone, Network, CheckCircle2, Search, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export default function Dashboard() {
   const { data: phones, isLoading: phonesLoading } = usePhones();
@@ -39,6 +38,8 @@ export default function Dashboard() {
 
   // Dashboard Filters
   const [searchQuery, setSearchQuery] = useState("");
+  const [phoneFilter, setPhoneFilter] = useState<"all" | "used" | "available">("all");
+  const [ipFilter, setIpFilter] = useState<"all" | "used" | "available">("all");
 
   // Helper function to calculate slot usage within 15 days
   const getPhoneSlotUsage = (phoneId: string): number => {
@@ -102,19 +103,33 @@ export default function Dashboard() {
 
   const filteredPhones = useMemo(() => {
     if (!phones) return [];
-    return phones.filter(p => 
-      p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.provider?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [phones, searchQuery]);
+    return phones
+      .filter(p =>
+        p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.remark?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .filter(p => {
+        const usage = getPhoneSlotUsage(p.id);
+        if (phoneFilter === "available") return usage < 4;
+        if (phoneFilter === "used") return usage > 0;
+        return true;
+      });
+  }, [phones, searchQuery, phoneFilter, slots]);
 
   const filteredIps = useMemo(() => {
     if (!ips) return [];
-    return ips.filter(i => 
-      i.ipAddress.includes(searchQuery) ||
-      i.provider?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [ips, searchQuery]);
+    return ips
+      .filter(i =>
+        i.ipAddress.includes(searchQuery) ||
+        i.remark?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      .filter(i => {
+        const usage = getIpSlotUsage(i.id);
+        if (ipFilter === "available") return usage < 4;
+        if (ipFilter === "used") return usage > 0;
+        return true;
+      });
+  }, [ips, searchQuery, ipFilter, slots]);
 
   // Metrics
   const totalPhones = phones?.length || 0;
@@ -181,7 +196,14 @@ export default function Dashboard() {
                   <CardTitle className="text-base font-semibold tracking-tight">Phone Utilization</CardTitle>
                 </div>
               </div>
-              <Badge variant="outline" className="bg-background font-mono text-xs">{filteredPhones.length} Devices</Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-background font-mono text-xs">{filteredPhones.length} Devices</Badge>
+                <ToggleGroup type="single" value={phoneFilter} onValueChange={(v) => v && setPhoneFilter(v as any)} className="justify-start" aria-label="Phone filter">
+                  <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
@@ -190,7 +212,6 @@ export default function Dashboard() {
                 <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent border-b border-border/60">
                     <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">Device</TableHead>
-                    <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Provider</TableHead>
                     <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-6">Capacity</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -210,24 +231,19 @@ export default function Dashboard() {
                         <TableCell className="pl-6 font-medium">
                           <div className="flex flex-col gap-0.5">
                             <span className="text-sm font-mono text-foreground/90 group-hover:text-primary transition-colors" data-testid={`text-phone-number-${phone.id}`}>{phone.phoneNumber}</span>
-                            {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{phone.remark}</span>}
+                            {phone.remark && <span className="text-[10px] text-destructive truncate max-w-[120px]">{phone.remark}</span>}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                           <Badge variant="secondary" className="font-normal text-[10px] text-muted-foreground/80 bg-muted/50 hover:bg-muted border-0">
-                            {phone.provider || "N/A"}
-                           </Badge>
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           <div className="flex flex-col items-end gap-1.5">
                              <div className="flex items-center gap-2 text-xs">
                                 <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-phone-usage-${phone.id}`}>
-                                  {usage} <span className="text-muted-foreground/50 font-normal">/ 4</span>
+                                  {usage} <span className="text-destructive font-normal">/ 4</span>
                                 </span>
                              </div>
                              <Progress 
                                 value={percentage} 
-                                className={`h-1.5 w-24 bg-muted ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-blue-500'}`} 
+                                className={`h-1.5 w-24 bg-muted ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-blue-500'}`}
                               />
                           </div>
                         </TableCell>
@@ -236,11 +252,11 @@ export default function Dashboard() {
                   })}
                   {filteredPhones.length === 0 && (
                      <TableRow>
-                       <TableCell colSpan={3} className="h-32 text-center">
-                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                           <Smartphone className="h-8 w-8 opacity-20" />
-                           <span className="text-sm">No phones found</span>
-                         </div>
+                       <TableCell colSpan={2} className="h-32 text-center">
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <Smartphone className="h-8 w-8 opacity-20" />
+                            <span className="text-sm">No phones found</span>
+                          </div>
                        </TableCell>
                      </TableRow>
                   )}
@@ -262,7 +278,14 @@ export default function Dashboard() {
                   <CardTitle className="text-base font-semibold tracking-tight">IP Utilization</CardTitle>
                 </div>
               </div>
-               <Badge variant="outline" className="bg-background font-mono text-xs">{filteredIps.length} IPs</Badge>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-background font-mono text-xs">{filteredIps.length} IPs</Badge>
+                <ToggleGroup type="single" value={ipFilter} onValueChange={(v) => v && setIpFilter(v as any)} className="justify-start" aria-label="IP filter">
+                  <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
@@ -271,7 +294,6 @@ export default function Dashboard() {
                 <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent border-b border-border/60">
                     <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">IP Address</TableHead>
-                    <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Provider</TableHead>
                     <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-6">Capacity</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -291,19 +313,14 @@ export default function Dashboard() {
                         <TableCell className="pl-6">
                            <div className="flex flex-col gap-0.5">
                             <span className="text-sm font-mono text-foreground/90 group-hover:text-primary transition-colors" data-testid={`text-ip-address-${ip.id}`}>{ip.ipAddress}</span>
-                            {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{ip.remark}</span>}
+                            {ip.remark && <span className="text-[10px] text-destructive truncate max-w-[120px]">{ip.remark}</span>}
                            </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="font-normal text-[10px] text-muted-foreground/80 bg-muted/50 hover:bg-muted border-0">
-                            {ip.provider || "N/A"}
-                           </Badge>
                         </TableCell>
                          <TableCell className="text-right pr-6">
                           <div className="flex flex-col items-end gap-1.5">
                              <div className="flex items-center gap-2 text-xs">
                                 <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-ip-usage-${ip.id}`}>
-                                  {usage} <span className="text-muted-foreground/50 font-normal">/ 4</span>
+                                  {usage} <span className="text-destructive font-normal">/ 4</span>
                                 </span>
                              </div>
                              <Progress 
@@ -317,7 +334,7 @@ export default function Dashboard() {
                   })}
                   {filteredIps.length === 0 && (
                      <TableRow>
-                       <TableCell colSpan={3} className="h-32 text-center">
+                       <TableCell colSpan={2} className="h-32 text-center">
                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
                            <Network className="h-8 w-8 opacity-20" />
                            <span className="text-sm">No IPs found</span>
@@ -333,105 +350,137 @@ export default function Dashboard() {
       </div>
 
       <Dialog open={isSlotDialogOpen} onOpenChange={setIsSlotDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Create Allocation</DialogTitle>
             <DialogDescription>
               Allocate slots for a Phone and IP pair. STRICT LIMIT enforced (Max 4 slots / 15 days).
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-               <div className="grid gap-2">
-                <Label>Allocation Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={`w-full justify-start text-left font-normal ${!selectedDate && "text-muted-foreground"}`} data-testid="button-select-date">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="count">Slot Count</Label>
-                <Input 
-                  id="count" 
-                  type="number" 
-                  min="1" 
-                  value={slotCount} 
-                  onChange={(e) => setSlotCount(parseInt(e.target.value) || 1)}
-                  data-testid="input-slot-count"
+
+          <div className="grid gap-6 py-4 grid-cols-1">
+            <div className="grid gap-2">
+              <Label>Allocation Date</Label>
+              <div className="rounded-md">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-medium">
+                    {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                  </div>
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedDate(undefined)}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                <Input
+                    type="date"
+                    value={selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""}
+                    onChange={(e) =>
+                        setSelectedDate(e.target.value ? new Date(e.target.value) : undefined)
+                    }
+                    data-testid="input-allocation-date"
                 />
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="phone">Select Phone</Label>
-              <Select onValueChange={setSelectedPhoneId} value={selectedPhoneId}>
-                <SelectTrigger data-testid="select-phone">
-                  <SelectValue placeholder="Choose a phone..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {phones?.map(phone => {
-                    const usage = getPhoneSlotUsage(phone.id);
-                    const disabled = usage >= 4;
-                    return (
-                      <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
-                        <div className="flex justify-between items-center w-full min-w-[200px]">
-                          <span>{phone.phoneNumber}</span>
-                          <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                            ({usage}/4 used)
-                          </span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
+            <div>
+              <div className="grid gap-2">
+                <Label htmlFor="count">Slot Count</Label>
+                <Input
+                    id="count"
+                    type="number"
+                    min="1"
+                    value={slotCount}
+                    onChange={(e) => setSlotCount(parseInt(e.target.value) || 1)}
+                    data-testid="input-slot-count"
+                />
+              </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="ip">Select IP Address</Label>
-              <Select onValueChange={setSelectedIpId} value={selectedIpId}>
-                <SelectTrigger data-testid="select-ip">
-                  <SelectValue placeholder="Choose an IP..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {ips?.map(ip => {
-                    const usage = getIpSlotUsage(ip.id);
-                    const disabled = usage >= 4;
-                    return (
-                      <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
-                         <div className="flex justify-between items-center w-full min-w-[200px]">
-                          <span>{ip.ipAddress}</span>
-                          <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                            ({usage}/4 used)
-                          </span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <div className="grid gap-2 mt-4">
+                <Label htmlFor="phone">Select Phone</Label>
+                <Select onValueChange={setSelectedPhoneId} value={selectedPhoneId}>
+                  <SelectTrigger data-testid="select-phone">
+                    <SelectValue placeholder="Choose a phone..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {phones?.map((phone) => {
+                      const usage = getPhoneSlotUsage(phone.id)
+                      const disabled = usage >= 4
+                      return (
+                          <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
+                            <div className="flex justify-between items-center w-full min-w-[200px]">
+                              <span>{phone.phoneNumber}</span>
+                              <span
+                                  className={`text-xs ml-2 ${
+                                      disabled
+                                          ? "text-destructive font-bold"
+                                          : "text-muted-foreground"
+                                  }`}
+                              >
+                        ({usage}/4 used)
+                      </span>
+                            </div>
+                          </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2 mt-4">
+                <Label htmlFor="ip">Select IP Address</Label>
+                <Select onValueChange={setSelectedIpId} value={selectedIpId}>
+                  <SelectTrigger data-testid="select-ip">
+                    <SelectValue placeholder="Choose an IP..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ips?.map((ip) => {
+                      const usage = getIpSlotUsage(ip.id)
+                      const disabled = usage >= 4
+                      return (
+                          <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
+                            <div className="flex justify-between items-center w-full min-w-[200px]">
+                              <span>{ip.ipAddress}</span>
+                              <span
+                                  className={`text-xs ml-2 ${
+                                      disabled
+                                          ? "text-destructive font-bold"
+                                          : "text-muted-foreground"
+                                  }`}
+                              >
+                        ({usage}/4 used)
+                      </span>
+                            </div>
+                          </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSlotDialogOpen(false)} data-testid="button-cancel-allocation">Cancel</Button>
-            <Button onClick={handleCreateSlot} disabled={createSlotMutation.isPending} data-testid="button-confirm-allocation">
+            <Button
+                variant="outline"
+                onClick={() => setIsSlotDialogOpen(false)}
+                data-testid="button-cancel-allocation"
+            >
+              Cancel
+            </Button>
+            <Button
+                onClick={handleCreateSlot}
+                disabled={createSlotMutation.isPending}
+                data-testid="button-confirm-allocation"
+            >
               {createSlotMutation.isPending ? "Creating..." : "Confirm Allocation"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* Phone Details Dialog */}
       <Dialog open={!!detailPhone} onOpenChange={(open) => !open && setDetailPhone(null)}>

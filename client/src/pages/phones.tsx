@@ -192,7 +192,7 @@ export default function PhonesPage() {
                   <FormItem>
                     <FormLabel>Phone Number <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input placeholder="+1234567890" {...field} data-testid="input-phone-number" />
+                      <Input placeholder="+1234567890" {...field} value={field.value ?? ""} data-testid="input-phone-number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -205,7 +205,7 @@ export default function PhonesPage() {
                   <FormItem>
                     <FormLabel>Email <span className="text-red-500">*</span></FormLabel>
                     <FormControl>
-                      <Input placeholder="user@example.com" {...field} data-testid="input-email" />
+                      <Input placeholder="user@example.com" {...field} value={field.value ?? ""} data-testid="input-email" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

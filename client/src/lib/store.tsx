@@ -8,7 +8,6 @@ export interface Phone {
   id: string;
   phoneNumber: string;
   email: string;
-  provider?: string;
   remark?: string;
   createdAt: string;
 }
@@ -59,8 +58,8 @@ interface StoreContextType extends AppState {
 
 const INITIAL_STATE: AppState = {
   phones: [
-    { id: "p1", phoneNumber: "+15550101", email: "demo1@example.com", provider: "Verizon", remark: "Primary demo phone", createdAt: new Date().toISOString() },
-    { id: "p2", phoneNumber: "+15550102", email: "demo2@example.com", provider: "AT&T", remark: "", createdAt: new Date().toISOString() },
+    { id: "p1", phoneNumber: "+15550101", email: "demo1@example.com", remark: "Primary demo phone", createdAt: new Date().toISOString() },
+    { id: "p2", phoneNumber: "+15550102", email: "demo2@example.com", remark: "", createdAt: new Date().toISOString() },
   ],
   ips: [
     { id: "i1", ipAddress: "192.168.1.101", provider: "AWS", remark: "US East Proxy", createdAt: new Date().toISOString() },
@@ -115,6 +114,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const logout = () => setState(prev => ({ ...prev, isAuthenticated: false }));
 
   const addPhone = (data: Omit<Phone, "id" | "createdAt">) => {
+    // Require phoneNumber
+    if (!data.phoneNumber) {
+      throw new Error("Phone number is required");
+    }
+
     if (state.phones.some(p => p.phoneNumber === data.phoneNumber)) {
       throw new Error("Phone number already exists");
     }
@@ -212,7 +216,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetData = () => {
-    setState({ ...INITIAL_STATE, isAuthenticated: true }); // Keep logged in
+    // Reset to initial demo data but preserve authentication state (do not auto-login)
+    setState(prev => ({ ...INITIAL_STATE, isAuthenticated: prev.isAuthenticated }));
   };
 
   return (

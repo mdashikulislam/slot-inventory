@@ -32,9 +32,9 @@ export default function IpsPage() {
     resolver: zodResolver(insertIpSchema),
     defaultValues: {
       ipAddress: "",
-      port: "",
-      username: "",
-      password: "",
+      port: "9001",
+      username: "ashik",
+      password: "11224411",
       provider: "",
       remark: "",
     },
@@ -61,9 +61,9 @@ export default function IpsPage() {
     setEditingId(ip.id);
     form.reset({
       ipAddress: ip.ipAddress,
-      port: ip.port || "",
-      username: ip.username || "",
-      password: ip.password || "",
+      port: ip.port || "9001",
+      username: ip.username || "ashik",
+      password: ip.password || "11224411",
       provider: ip.provider || "",
       remark: ip.remark || "",
     });
@@ -85,9 +85,9 @@ export default function IpsPage() {
     setEditingId(null);
     form.reset({
       ipAddress: "",
-      port: "",
-      username: "",
-      password: "",
+      port: "9001",
+      username: "ashik",
+      password: "11224411",
       provider: "",
       remark: "",
     });
@@ -283,7 +283,7 @@ export default function IpsPage() {
                     <FormItem>
                       <FormLabel>IP Address <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="192.168.1.1" className="font-mono" {...field} data-testid="input-ip-address" />
+                        <Input placeholder="192.168.1.1" className="font-mono" {...field} data-testid="input-ip-address" required />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -294,9 +294,9 @@ export default function IpsPage() {
                   name="port"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Port</FormLabel>
+                      <FormLabel>Port <span className="text-red-500">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="8080" className="font-mono" {...field} data-testid="input-port" />
+                        <Input placeholder="8080" className="font-mono" {...field} data-testid="input-port" required />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -311,7 +311,7 @@ export default function IpsPage() {
                     <FormItem>
                       <FormLabel>Username</FormLabel>
                       <FormControl>
-                        <Input placeholder="proxy-user" {...field} data-testid="input-username" />
+                        <Input placeholder="proxy-user" {...field} value={field.value ?? ""} data-testid="input-username" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -324,7 +324,7 @@ export default function IpsPage() {
                     <FormItem>
                       <FormLabel>Password</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••" {...field} data-testid="input-password" />
+                        <Input type="password" placeholder="••••••" {...field} value={field.value ?? ""} data-testid="input-password" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -338,7 +338,7 @@ export default function IpsPage() {
                   <FormItem>
                     <FormLabel>Provider</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. AWS" {...field} data-testid="input-provider" />
+                      <Input placeholder="e.g. AWS" {...field} value={field.value ?? ""} data-testid="input-provider" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -351,7 +351,7 @@ export default function IpsPage() {
                   <FormItem>
                     <FormLabel>Remark</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional notes..." {...field} data-testid="input-remark" />
+                      <Input placeholder="Optional notes..." {...field} value={field.value ?? ""} data-testid="input-remark" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

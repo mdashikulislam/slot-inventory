@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,22 +8,48 @@ import { ServerCrash, Lock, User } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
 
+// Simple demo credentials (client-side validation only).
+// In a real app this should be validated server-side.
+const DEMO_USERNAME = "ashik";
+const DEMO_PASSWORD = "Dev11224411";
+
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useStore();
+  const { login, isAuthenticated } = useStore();
+
+  const [username, setUsername] = useState(DEMO_USERNAME);
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    // If user is already authenticated, redirect to dashboard
+    if (isAuthenticated) {
+      setLocation("/");
+    }
+  }, [isAuthenticated, setLocation]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Basic client-side validation
+    if (!username || !password) {
+      toast.error("Please enter username and password");
+      return;
+    }
+
     setIsLoading(true);
-    
-    // Mock login delay
+
+    // Mock server-side credential check (replace with real API call as needed)
     setTimeout(() => {
-      login(); // Update store state
+      if (username === DEMO_USERNAME && password === DEMO_PASSWORD) {
+        login(); // Update store state
+        toast.success("Welcome back, Administrator");
+        setLocation("/");
+      } else {
+        toast.error("Invalid username or password");
+      }
       setIsLoading(false);
-      toast.success("Welcome back, Administrator");
-      setLocation("/");
-    }, 800);
+    }, 700);
   };
 
   return (
@@ -48,14 +74,29 @@ export default function LoginPage() {
                 <Label htmlFor="username">Username</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input id="username" placeholder="admin" className="pl-9" defaultValue="admin" required />
+                  <Input
+                    id="username"
+                    placeholder="admin"
+                    className="pl-9"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                  />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input id="password" type="password" placeholder="••••••••" className="pl-9" required />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    className="pl-9"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
                 </div>
               </div>
             </CardContent>
@@ -66,7 +107,7 @@ export default function LoginPage() {
             </CardFooter>
           </form>
         </Card>
-        
+
         <p className="text-center text-xs text-muted-foreground">
           &copy; 2024 SlotManager Enterprise Systems. All rights reserved.
         </p>
