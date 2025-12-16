@@ -28,6 +28,7 @@ export interface Slot {
   id: string;
   phoneId: string;
   ipId: string;
+  count: number; // Added count field
   usedAt: string;
 }
 
@@ -45,7 +46,7 @@ interface StoreContextType extends AppState {
   addIp: (ip: Omit<IP, "id" | "createdAt">) => void;
   updateIp: (id: string, ip: Partial<IP>) => void;
   deleteIp: (id: string) => void;
-  addSlot: (phoneId: string, ipId: string) => { success: boolean; error?: string };
+  addSlot: (phoneId: string, ipId: string, count: number, date: Date) => { success: boolean; error?: string };
   getPhoneSlotUsage: (phoneId: string) => number;
   getIpSlotUsage: (ipId: string) => number;
   resetData: () => void;
@@ -76,10 +77,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem("slot-manager-data");
     const parsed = saved ? JSON.parse(saved) : INITIAL_STATE;
-    // Always start unauthenticated on full refresh for security simulation, 
-    // or keep it if we want persistence. Let's persist it for convenience in dev but typical for admin apps to require login.
-    // For this mockup, let's persist everything BUT auth state to force login on refresh? 
-    // Actually, user experience is better if we persist auth for reload.
     return { ...parsed, isAuthenticated: parsed.isAuthenticated ?? false };
   });
 
@@ -138,34 +135,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const getPhoneSlotUsage = (phoneId: string) => {
     const cutoff = subDays(new Date(), 15);
-    return state.slots.filter(s => 
-      s.phoneId === phoneId && isAfter(parseISO(s.usedAt), cutoff)
-    ).length;
+    return state.slots
+      .filter(s => s.phoneId === phoneId && isAfter(parseISO(s.usedAt), cutoff))
+      .reduce((acc, curr) => acc + (curr.count || 1), 0);
   };
 
   const getIpSlotUsage = (ipId: string) => {
     const cutoff = subDays(new Date(), 15);
-    return state.slots.filter(s => 
-      s.ipId === ipId && isAfter(parseISO(s.usedAt), cutoff)
-    ).length;
+    return state.slots
+      .filter(s => s.ipId === ipId && isAfter(parseISO(s.usedAt), cutoff))
+      .reduce((acc, curr) => acc + (curr.count || 1), 0);
   };
 
-  const addSlot = (phoneId: string, ipId: string) => {
-    const phoneUsage = getPhoneSlotUsage(phoneId);
-    const ipUsage = getIpSlotUsage(ipId);
-
-    if (phoneUsage >= 4) {
-      return { success: false, error: "Phone has reached its 4-slot limit (last 15 days)." };
-    }
-    if (ipUsage >= 4) {
-      return { success: false, error: "IP has reached its 4-slot limit (last 15 days)." };
-    }
-
+  const addSlot = (phoneId: string, ipId: string, count: number, date: Date) => {
+    // We removed the hard validation block as requested ("that not maximum 4")
+    // Now we just allow it, but we still track usage for display.
+    
     const newSlot: Slot = {
       id: nanoid(),
       phoneId,
       ipId,
-      usedAt: new Date().toISOString()
+      count,
+      usedAt: date.toISOString()
     };
 
     setState(prev => ({ ...prev, slots: [newSlot, ...prev.slots] }));

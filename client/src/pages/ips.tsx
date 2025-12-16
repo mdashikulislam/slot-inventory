@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
 import { useStore, IP } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Plus, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Plus, Pencil, Trash2, Download, Search, CheckCircle, XCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 const ipSchema = z.object({
   ipAddress: z.string().min(7, "Valid IP address is required"),
@@ -30,6 +31,8 @@ export default function IpsPage() {
   const { ips, addIp, updateIp, deleteIp, getIpSlotUsage } = useStore();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "available">("all");
 
   const form = useForm<IpFormValues>({
     resolver: zodResolver(ipSchema),
@@ -93,21 +96,97 @@ export default function IpsPage() {
     setIsDialogOpen(true);
   };
 
+  // Filter Logic
+  const filteredIps = useMemo(() => {
+    return ips.filter(ip => {
+      const matchesSearch = 
+        ip.ipAddress.includes(searchQuery) || 
+        ip.provider?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ip.remark?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const usage = getIpSlotUsage(ip.id);
+      const matchesFilter = filterType === "all" || (filterType === "available" && usage < 4);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [ips, searchQuery, filterType, getIpSlotUsage]);
+
+  // CSV Export Logic
+  const handleExport = () => {
+    const headers = ["IP Address", "Port", "Provider", "Remark", "Used Slots", "Status"];
+    const rows = filteredIps.map(ip => {
+      const usage = getIpSlotUsage(ip.id);
+      const status = usage >= 4 ? "Full" : "Available";
+      return [
+        ip.ipAddress,
+        ip.port || "",
+        ip.provider || "",
+        ip.remark || "",
+        usage.toString(),
+        status
+      ];
+    });
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `ips_export_${filterType}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${filteredIps.length} IPs to CSV`);
+  };
+
   return (
     <Layout>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">IP Address Management</h1>
           <p className="text-muted-foreground mt-1">Manage proxies and IP addresses.</p>
         </div>
-        <Button onClick={openAddDialog} className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> Add IP
-        </Button>
+        <div className="flex gap-2 w-full md:w-auto">
+          <Button onClick={openAddDialog} className="bg-primary text-primary-foreground">
+            <Plus className="mr-2 h-4 w-4" /> Add IP
+          </Button>
+        </div>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>Network Resources</CardTitle>
+      <Card className="shadow-sm border-muted">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <CardTitle>Network Resources</CardTitle>
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+              <div className="relative flex-1 md:w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search IPs..." 
+                  className="pl-8" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <ToggleGroup type="single" value={filterType} onValueChange={(v) => v && setFilterType(v as any)} className="justify-start">
+                <ToggleGroupItem value="all" aria-label="All IPs">
+                  All
+                </ToggleGroupItem>
+                <ToggleGroupItem value="available" aria-label="Available IPs">
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                  Available
+                </ToggleGroupItem>
+              </ToggleGroup>
+              <Button variant="outline" onClick={handleExport} title="Export CSV">
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -122,25 +201,34 @@ export default function IpsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ips.length === 0 ? (
+              {filteredIps.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    No IPs found. Click "Add IP" to create one.
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2">
+                      <Search className="h-8 w-8 opacity-20" />
+                      <p>No IPs found matching your filters.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                ips.map((ip) => {
+                filteredIps.map((ip) => {
                   const usage = getIpSlotUsage(ip.id);
+                  const isFull = usage >= 4;
                   return (
-                    <TableRow key={ip.id}>
-                      <TableCell className="font-medium font-mono text-xs md:text-sm">{ip.ipAddress}</TableCell>
+                    <TableRow key={ip.id} className={isFull ? "bg-muted/10" : ""}>
+                      <TableCell className="font-medium font-mono text-xs md:text-sm">
+                        <div className="flex items-center gap-2">
+                          {isFull ? <XCircle className="h-3 w-3 text-red-500" /> : <CheckCircle className="h-3 w-3 text-green-500" />}
+                          {ip.ipAddress}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-mono text-xs md:text-sm">{ip.port || "-"}</TableCell>
                       <TableCell>{ip.provider || "-"}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          usage >= 4 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          isFull ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                         }`}>
-                          {usage} / 4
+                          {usage}
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground">{ip.remark || "-"}</TableCell>
