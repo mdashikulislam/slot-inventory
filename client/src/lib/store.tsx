@@ -47,6 +47,7 @@ interface StoreContextType extends AppState {
   updateIp: (id: string, ip: Partial<IP>) => void;
   deleteIp: (id: string) => void;
   addSlot: (phoneId: string, ipId: string, count: number, date: Date) => { success: boolean; error?: string };
+  deleteSlot: (id: string) => void;
   getPhoneSlotUsage: (phoneId: string) => number;
   getIpSlotUsage: (ipId: string) => number;
   resetData: () => void;
@@ -148,9 +149,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addSlot = (phoneId: string, ipId: string, count: number, date: Date) => {
-    // We removed the hard validation block as requested ("that not maximum 4")
-    // Now we just allow it, but we still track usage for display.
-    
     const newSlot: Slot = {
       id: nanoid(),
       phoneId,
@@ -161,6 +159,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     setState(prev => ({ ...prev, slots: [newSlot, ...prev.slots] }));
     return { success: true };
+  };
+
+  const deleteSlot = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      slots: prev.slots.filter(s => s.id !== id)
+    }));
   };
 
   const resetData = () => {
@@ -177,6 +182,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateIp,
       deleteIp,
       addSlot,
+      deleteSlot,
       getPhoneSlotUsage,
       getIpSlotUsage,
       resetData,

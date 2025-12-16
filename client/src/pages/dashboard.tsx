@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
-import { useStore } from "@/lib/store";
+import { useStore, Phone, IP } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link2, Smartphone, Network, CheckCircle2, Search, Calendar as CalendarIcon, Filter } from "lucide-react";
+import { Link2, Smartphone, Network, CheckCircle2, Search, Calendar as CalendarIcon, Filter, Trash2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -14,10 +14,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function Dashboard() {
-  const { phones, ips, slots, getPhoneSlotUsage, getIpSlotUsage, addSlot } = useStore();
+  const { phones, ips, slots, getPhoneSlotUsage, getIpSlotUsage, addSlot, deleteSlot } = useStore();
   const [isSlotDialogOpen, setIsSlotDialogOpen] = useState(false);
+  
+  // Details Dialog State
+  const [detailPhone, setDetailPhone] = useState<Phone | null>(null);
+  const [detailIp, setDetailIp] = useState<IP | null>(null);
   
   // Slot Creation State
   const [selectedPhoneId, setSelectedPhoneId] = useState<string>("");
@@ -48,6 +53,13 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteSlot = (id: string) => {
+    if (confirm("Are you sure you want to remove this slot allocation?")) {
+      deleteSlot(id);
+      toast.success("Slot removed");
+    }
+  };
+
   const filteredPhones = useMemo(() => {
     return phones.filter(p => 
       p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -61,6 +73,12 @@ export default function Dashboard() {
       i.provider?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [ips, searchQuery]);
+
+  // Metrics
+  const totalPhones = phones.length;
+  const totalIps = ips.length;
+  const availablePhones = phones.filter(p => getPhoneSlotUsage(p.id) < 4).length;
+  const availableIps = ips.filter(i => getIpSlotUsage(i.id) < 4).length;
 
   return (
     <Layout>
@@ -93,8 +111,8 @@ export default function Dashboard() {
             <Smartphone className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{phones.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active devices</p>
+            <div className="text-2xl font-bold">{totalPhones}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total devices</p>
           </CardContent>
         </Card>
         <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-indigo-500">
@@ -103,30 +121,28 @@ export default function Dashboard() {
             <Network className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{ips.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">Proxies available</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Slots Used</CardTitle>
-            <Link2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {slots.reduce((acc, curr) => acc + (curr.count || 1), 0)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Total allocation count</p>
+            <div className="text-2xl font-bold">{totalIps}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total proxies</p>
           </CardContent>
         </Card>
         <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">System Status</CardTitle>
+            <CardTitle className="text-sm font-medium">Available Phones</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">Healthy</div>
-            <p className="text-xs text-muted-foreground mt-1">Operational</p>
+            <div className="text-2xl font-bold">{availablePhones}</div>
+            <p className="text-xs text-muted-foreground mt-1">Devices with capacity</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm hover:shadow-md transition-shadow border-l-4 border-l-teal-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Available IPs</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-teal-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{availableIps}</div>
+            <p className="text-xs text-muted-foreground mt-1">Proxies with capacity</p>
           </CardContent>
         </Card>
       </div>
@@ -156,10 +172,14 @@ export default function Dashboard() {
                     .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())[0];
 
                   return (
-                    <div key={phone.id} className="p-4 hover:bg-muted/20 transition-colors">
+                    <div 
+                      key={phone.id} 
+                      className="p-4 hover:bg-muted/20 transition-colors cursor-pointer group"
+                      onClick={() => setDetailPhone(phone)}
+                    >
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <div className="font-semibold text-sm">{phone.phoneNumber}</div>
+                          <div className="font-semibold text-sm group-hover:text-primary transition-colors">{phone.phoneNumber}</div>
                           <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                             <span>{phone.provider || "Unknown Provider"}</span>
                             {lastSlot && (
@@ -220,10 +240,14 @@ export default function Dashboard() {
                     .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())[0];
 
                   return (
-                    <div key={ip.id} className="p-4 hover:bg-muted/20 transition-colors">
+                    <div 
+                      key={ip.id} 
+                      className="p-4 hover:bg-muted/20 transition-colors cursor-pointer group"
+                      onClick={() => setDetailIp(ip)}
+                    >
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <div className="font-semibold text-sm font-mono">{ip.ipAddress}</div>
+                          <div className="font-semibold text-sm font-mono group-hover:text-primary transition-colors">{ip.ipAddress}</div>
                           <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                             <span>{ip.provider || "Unknown Provider"}</span>
                              {lastSlot && (
@@ -364,6 +388,104 @@ export default function Dashboard() {
             <Button variant="outline" onClick={() => setIsSlotDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCreateSlot}>Confirm Allocation</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Phone Details Dialog */}
+      <Dialog open={!!detailPhone} onOpenChange={(open) => !open && setDetailPhone(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Phone Usage Details</DialogTitle>
+            <DialogDescription>
+              {detailPhone?.phoneNumber} ({detailPhone?.provider})
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+             <Table>
+               <TableHeader>
+                 <TableRow>
+                   <TableHead>IP Address</TableHead>
+                   <TableHead>Date</TableHead>
+                   <TableHead className="text-right">Slots</TableHead>
+                   <TableHead className="w-[50px]"></TableHead>
+                 </TableRow>
+               </TableHeader>
+               <TableBody>
+                 {detailPhone && slots.filter(s => s.phoneId === detailPhone.id).length === 0 && (
+                   <TableRow>
+                     <TableCell colSpan={4} className="text-center text-muted-foreground py-4">No active allocations</TableCell>
+                   </TableRow>
+                 )}
+                 {detailPhone && slots
+                   .filter(s => s.phoneId === detailPhone.id)
+                   .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())
+                   .map(slot => {
+                     const ip = ips.find(i => i.id === slot.ipId);
+                     return (
+                       <TableRow key={slot.id}>
+                         <TableCell className="font-mono text-xs">{ip?.ipAddress || "Unknown IP"}</TableCell>
+                         <TableCell>{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
+                         <TableCell className="text-right font-bold">{slot.count || 1}</TableCell>
+                         <TableCell>
+                           <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteSlot(slot.id)}>
+                             <X className="h-4 w-4" />
+                           </Button>
+                         </TableCell>
+                       </TableRow>
+                     );
+                   })}
+               </TableBody>
+             </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* IP Details Dialog */}
+      <Dialog open={!!detailIp} onOpenChange={(open) => !open && setDetailIp(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>IP Usage Details</DialogTitle>
+            <DialogDescription>
+              {detailIp?.ipAddress} ({detailIp?.provider})
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+             <Table>
+               <TableHeader>
+                 <TableRow>
+                   <TableHead>Phone Number</TableHead>
+                   <TableHead>Date</TableHead>
+                   <TableHead className="text-right">Slots</TableHead>
+                   <TableHead className="w-[50px]"></TableHead>
+                 </TableRow>
+               </TableHeader>
+               <TableBody>
+                 {detailIp && slots.filter(s => s.ipId === detailIp.id).length === 0 && (
+                   <TableRow>
+                     <TableCell colSpan={4} className="text-center text-muted-foreground py-4">No active allocations</TableCell>
+                   </TableRow>
+                 )}
+                 {detailIp && slots
+                   .filter(s => s.ipId === detailIp.id)
+                   .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())
+                   .map(slot => {
+                     const phone = phones.find(p => p.id === slot.phoneId);
+                     return (
+                       <TableRow key={slot.id}>
+                         <TableCell>{phone?.phoneNumber || "Unknown Phone"}</TableCell>
+                         <TableCell>{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
+                         <TableCell className="text-right font-bold">{slot.count || 1}</TableCell>
+                         <TableCell>
+                           <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteSlot(slot.id)}>
+                             <X className="h-4 w-4" />
+                           </Button>
+                         </TableCell>
+                       </TableRow>
+                     );
+                   })}
+               </TableBody>
+             </Table>
+          </div>
         </DialogContent>
       </Dialog>
     </Layout>

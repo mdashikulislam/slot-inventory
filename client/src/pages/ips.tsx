@@ -111,37 +111,36 @@ export default function IpsPage() {
     });
   }, [ips, searchQuery, filterType, getIpSlotUsage]);
 
-  // CSV Export Logic
+  // TXT Export Logic
   const handleExport = () => {
-    const headers = ["IP Address", "Port", "Provider", "Remark", "Used Slots", "Status"];
-    const rows = filteredIps.map(ip => {
-      const usage = getIpSlotUsage(ip.id);
-      const status = usage >= 4 ? "Full" : "Available";
-      return [
+    // Format: ip:port:username:password
+    const lines = filteredIps.map(ip => {
+      const parts = [
         ip.ipAddress,
         ip.port || "",
-        ip.provider || "",
-        ip.remark || "",
-        usage.toString(),
-        status
+        ip.username || "",
+        ip.password || ""
       ];
+      // Filter out empty strings only if you want compact format, but usually strict format keeps delimiters
+      // "ip:port:username:password" -> "1.1.1.1:8080:user:pass"
+      // If parts are missing, we still keep the colons? e.g. "1.1.1.1:::".
+      // Let's assume standard proxy format which usually keeps colons or drops if empty at end.
+      // Let's keep it strict: ip:port:username:password
+      return parts.join(":");
     });
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.join(","))
-    ].join("\n");
+    const txtContent = lines.join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([txtContent], { type: "text/plain;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `ips_export_${filterType}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `ips_export_${filterType}_${new Date().toISOString().split('T')[0]}.txt`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success(`Exported ${filteredIps.length} IPs to CSV`);
+    toast.success(`Exported ${filteredIps.length} IPs to TXT`);
   };
 
   return (
@@ -181,9 +180,9 @@ export default function IpsPage() {
                   Available
                 </ToggleGroupItem>
               </ToggleGroup>
-              <Button variant="outline" onClick={handleExport} title="Export CSV">
+              <Button variant="outline" onClick={handleExport} title="Export TXT">
                 <Download className="h-4 w-4 mr-2" />
-                Export
+                Export .txt
               </Button>
             </div>
           </div>
