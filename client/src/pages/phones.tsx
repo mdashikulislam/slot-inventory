@@ -31,7 +31,6 @@ export default function PhonesPage() {
     defaultValues: {
       phoneNumber: "",
       email: "",
-      provider: "",
       remark: "",
     },
   });
@@ -58,7 +57,6 @@ export default function PhonesPage() {
     form.reset({
       phoneNumber: phone.phoneNumber,
       email: phone.email,
-      provider: phone.provider || "",
       remark: phone.remark || "",
     });
     setIsDialogOpen(true);
@@ -80,7 +78,6 @@ export default function PhonesPage() {
     form.reset({
       phoneNumber: "",
       email: "",
-      provider: "",
       remark: "",
     });
     setIsDialogOpen(true);
@@ -127,7 +124,6 @@ export default function PhonesPage() {
               <TableRow>
                 <TableHead>Phone Number</TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Provider</TableHead>
                 <TableHead>Slots Used (15d)</TableHead>
                 <TableHead>Remark</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
@@ -136,7 +132,7 @@ export default function PhonesPage() {
             <TableBody>
               {phones.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No phones found. Click "Add Phone" to create one.
                   </TableCell>
                 </TableRow>
@@ -147,7 +143,6 @@ export default function PhonesPage() {
                     <TableRow key={phone.id} data-testid={`row-phone-${phone.id}`}>
                       <TableCell className="font-medium" data-testid={`text-phone-number-${phone.id}`}>{phone.phoneNumber}</TableCell>
                       <TableCell data-testid={`text-email-${phone.id}`}>{phone.email || "-"}</TableCell>
-                      <TableCell data-testid={`text-provider-${phone.id}`}>{phone.provider || "-"}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           usage >= 4 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
@@ -216,21 +211,6 @@ export default function PhonesPage() {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="provider"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Provider</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. AT&T" {...field} data-testid="input-provider" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
               <FormField
                 control={form.control}
                 name="remark"
@@ -238,7 +218,7 @@ export default function PhonesPage() {
                   <FormItem>
                     <FormLabel>Remark</FormLabel>
                     <FormControl>
-                      <Input placeholder="Optional notes..." {...field} data-testid="input-remark" />
+                      <Input placeholder="Optional notes..." {...field} value={field.value || ""} data-testid="input-remark" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

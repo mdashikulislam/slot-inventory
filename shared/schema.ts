@@ -21,7 +21,6 @@ export const phones = pgTable("phones", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   phoneNumber: text("phone_number").notNull().unique(),
   email: text("email").notNull(),
-  provider: text("provider").default(""),
   remark: text("remark").default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
