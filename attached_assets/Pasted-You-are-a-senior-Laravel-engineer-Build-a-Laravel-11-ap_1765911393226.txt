@@ -1,0 +1,93 @@
+You are a senior Laravel engineer.
+
+Build a Laravel 11 application for a SLOT MANAGEMENT SYSTEM with the following requirements.
+
+TECH STACK:
+- Laravel 11
+- PHP 8.2+
+- SQLite database
+- Blade or Livewire for UI (no React)
+- No Redis, no queues, no Horizon
+- Must run on Replit using `php artisan serve --host=0.0.0.0 --port=3000`
+
+CORE ENTITIES:
+
+1) Phone
+- phone_number (string, unique)
+- email (string)
+- provider (string, nullable)
+- remark (text, nullable)
+
+2) IP
+- ip_address (string, unique)
+- provider (string)
+- remark (text, nullable)
+
+3) Slot
+- phone_id (FK → phones.id)
+- ip_id (FK → ips.id)
+- used_at (datetime)
+
+RELATIONSHIPS:
+- One phone can be used with multiple IPs
+- One IP can be used with multiple phones
+- Phone ↔ IP is many-to-many via Slot table
+
+SLOT RULES (VERY IMPORTANT):
+- Each phone can use MAX 4 slots within the LAST 15 DAYS (rolling window)
+- Each IP can use MAX 4 slots within the LAST 15 DAYS
+- A slot can ONLY be created if BOTH phone AND IP have available slots
+- No fixed slot counter, slot usage must be calculated dynamically from time range
+
+FUNCTIONAL REQUIREMENTS:
+
+ADMIN FEATURES:
+- Manually add / edit / delete Phones
+- Manually add / edit / delete IPs
+- Create Slot usage by selecting one Phone and one IP
+- Block slot creation if phone or IP exceeds limit
+
+DASHBOARD:
+- Phone list showing:
+  phone_number
+  email
+  provider
+  used slots (last 15 days)
+  remaining slots (4 - used)
+- IP list showing:
+  ip_address
+  provider
+  used slots (last 15 days)
+  remaining slots (4 - used)
+
+VALIDATION:
+- Prevent duplicate phone numbers
+- Prevent duplicate IP addresses
+- Show clear error message when slot limit exceeded
+
+DATABASE:
+- Use Laravel migrations
+- Use SQLite database
+- Auto-create database file if missing
+
+CODE QUALITY:
+- Clean Eloquent models
+- Proper relationships
+- Controllers must be slim
+- Business logic inside services or model methods
+- Use Carbon for date calculations
+
+DELIVERABLES:
+- Migrations
+- Models
+- Controllers
+- Routes (web.php)
+- Blade views for CRUD + dashboard
+- Slot creation logic with validation
+- Ready to run on Replit
+
+IMPORTANT:
+- Do NOT use seeders unless necessary
+- Do NOT use auth unless asked
+- Do NOT use API tokens
+- Everything must work with fresh install
