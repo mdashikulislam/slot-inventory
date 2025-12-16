@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -105,7 +104,10 @@ export default function Dashboard() {
   const filteredPhones = useMemo(() => {
     if (!phones) return [];
     return phones
-      .filter(p => p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter(p =>
+        p.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.remark?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
       .filter(p => {
         const usage = getPhoneSlotUsage(p.id);
         if (phoneFilter === "available") return usage < 4;
@@ -119,7 +121,7 @@ export default function Dashboard() {
     return ips
       .filter(i =>
         i.ipAddress.includes(searchQuery) ||
-        i.provider?.toLowerCase().includes(searchQuery.toLowerCase())
+        i.remark?.toLowerCase().includes(searchQuery.toLowerCase())
       )
       .filter(i => {
         const usage = getIpSlotUsage(i.id);
@@ -292,7 +294,6 @@ export default function Dashboard() {
                 <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent border-b border-border/60">
                     <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">IP Address</TableHead>
-                    <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Provider</TableHead>
                     <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-6">Capacity</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -315,11 +316,6 @@ export default function Dashboard() {
                             {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{ip.remark}</span>}
                            </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="font-normal text-[10px] text-muted-foreground/80 bg-muted/50 hover:bg-muted border-0">
-                            {ip.provider || "N/A"}
-                           </Badge>
-                        </TableCell>
                          <TableCell className="text-right pr-6">
                           <div className="flex flex-col items-end gap-1.5">
                              <div className="flex items-center gap-2 text-xs">
@@ -338,7 +334,7 @@ export default function Dashboard() {
                   })}
                   {filteredIps.length === 0 && (
                      <TableRow>
-                       <TableCell colSpan={3} className="h-32 text-center">
+                       <TableCell colSpan={2} className="h-32 text-center">
                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
                            <Network className="h-8 w-8 opacity-20" />
                            <span className="text-sm">No IPs found</span>
@@ -373,10 +369,11 @@ export default function Dashboard() {
                     <Button variant="outline" size="sm" onClick={() => setSelectedDate(undefined)}>Clear</Button>
                   </div>
                 </div>
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
+                <Input
+                  type="date"
+                  value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
+                  onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value) : undefined)}
+                  data-testid="input-allocation-date"
                 />
               </div>
             </div>
