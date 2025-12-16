@@ -199,9 +199,9 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 <Badge variant="outline" className="bg-background font-mono text-xs">{filteredPhones.length} Devices</Badge>
                 <ToggleGroup type="single" value={phoneFilter} onValueChange={(v) => v && setPhoneFilter(v as any)} className="justify-start" aria-label="Phone filter">
-                  <ToggleGroupItem value="all">All</ToggleGroupItem>
-                  <ToggleGroupItem value="used">Used</ToggleGroupItem>
-                  <ToggleGroupItem value="available">Available</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
                 </ToggleGroup>
               </div>
             </div>
@@ -231,19 +231,19 @@ export default function Dashboard() {
                         <TableCell className="pl-6 font-medium">
                           <div className="flex flex-col gap-0.5">
                             <span className="text-sm font-mono text-foreground/90 group-hover:text-primary transition-colors" data-testid={`text-phone-number-${phone.id}`}>{phone.phoneNumber}</span>
-                            {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{phone.remark}</span>}
+                            {phone.remark && <span className="text-[10px] text-destructive truncate max-w-[120px]">{phone.remark}</span>}
                           </div>
                         </TableCell>
                         <TableCell className="text-right pr-6">
                           <div className="flex flex-col items-end gap-1.5">
                              <div className="flex items-center gap-2 text-xs">
                                 <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-phone-usage-${phone.id}`}>
-                                  {usage} <span className="text-muted-foreground/50 font-normal">/ 4</span>
+                                  {usage} <span className="text-destructive font-normal">/ 4</span>
                                 </span>
                              </div>
                              <Progress 
                                 value={percentage} 
-                                className={`h-1.5 w-24 bg-muted ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-blue-500'}`} 
+                                className={`h-1.5 w-24 bg-muted ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-blue-500'}`}
                               />
                           </div>
                         </TableCell>
@@ -281,9 +281,9 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 <Badge variant="outline" className="bg-background font-mono text-xs">{filteredIps.length} IPs</Badge>
                 <ToggleGroup type="single" value={ipFilter} onValueChange={(v) => v && setIpFilter(v as any)} className="justify-start" aria-label="IP filter">
-                  <ToggleGroupItem value="all">All</ToggleGroupItem>
-                  <ToggleGroupItem value="used">Used</ToggleGroupItem>
-                  <ToggleGroupItem value="available">Available</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
                 </ToggleGroup>
               </div>
             </div>
@@ -313,14 +313,14 @@ export default function Dashboard() {
                         <TableCell className="pl-6">
                            <div className="flex flex-col gap-0.5">
                             <span className="text-sm font-mono text-foreground/90 group-hover:text-primary transition-colors" data-testid={`text-ip-address-${ip.id}`}>{ip.ipAddress}</span>
-                            {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{ip.remark}</span>}
+                            {ip.remark && <span className="text-[10px] text-destructive truncate max-w-[120px]">{ip.remark}</span>}
                            </div>
                         </TableCell>
                          <TableCell className="text-right pr-6">
                           <div className="flex flex-col items-end gap-1.5">
                              <div className="flex items-center gap-2 text-xs">
                                 <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-ip-usage-${ip.id}`}>
-                                  {usage} <span className="text-muted-foreground/50 font-normal">/ 4</span>
+                                  {usage} <span className="text-destructive font-normal">/ 4</span>
                                 </span>
                              </div>
                              <Progress 
@@ -350,30 +350,37 @@ export default function Dashboard() {
       </div>
 
       <Dialog open={isSlotDialogOpen} onOpenChange={setIsSlotDialogOpen}>
-        <DialogContent className="sm:max-w-[700px]">
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Create Allocation</DialogTitle>
             <DialogDescription>
               Allocate slots for a Phone and IP pair. STRICT LIMIT enforced (Max 4 slots / 15 days).
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 py-4 grid-cols-1 md:grid-cols-2">
+
+          <div className="grid gap-6 py-4 grid-cols-1">
             <div className="grid gap-2">
               <Label>Allocation Date</Label>
-              <div className="rounded-md border p-2">
+              <div className="rounded-md">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium">
                     {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
                   </div>
-                  <div>
-                    <Button variant="outline" size="sm" onClick={() => setSelectedDate(undefined)}>Clear</Button>
-                  </div>
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedDate(undefined)}
+                  >
+                    Clear
+                  </Button>
                 </div>
                 <Input
-                  type="date"
-                  value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
-                  onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value) : undefined)}
-                  data-testid="input-allocation-date"
+                    type="date"
+                    value={selectedDate ? format(selectedDate, "yyyy-MM-dd") : ""}
+                    onChange={(e) =>
+                        setSelectedDate(e.target.value ? new Date(e.target.value) : undefined)
+                    }
+                    data-testid="input-allocation-date"
                 />
               </div>
             </div>
@@ -381,13 +388,13 @@ export default function Dashboard() {
             <div>
               <div className="grid gap-2">
                 <Label htmlFor="count">Slot Count</Label>
-                <Input 
-                  id="count" 
-                  type="number" 
-                  min="1" 
-                  value={slotCount} 
-                  onChange={(e) => setSlotCount(parseInt(e.target.value) || 1)}
-                  data-testid="input-slot-count"
+                <Input
+                    id="count"
+                    type="number"
+                    min="1"
+                    value={slotCount}
+                    onChange={(e) => setSlotCount(parseInt(e.target.value) || 1)}
+                    data-testid="input-slot-count"
                 />
               </div>
 
@@ -398,19 +405,25 @@ export default function Dashboard() {
                     <SelectValue placeholder="Choose a phone..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {phones?.map(phone => {
-                      const usage = getPhoneSlotUsage(phone.id);
-                      const disabled = usage >= 4;
+                    {phones?.map((phone) => {
+                      const usage = getPhoneSlotUsage(phone.id)
+                      const disabled = usage >= 4
                       return (
-                        <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
-                          <div className="flex justify-between items-center w-full min-w-[200px]">
-                            <span>{phone.phoneNumber}</span>
-                            <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                              ({usage}/4 used)
-                            </span>
-                          </div>
-                        </SelectItem>
-                      );
+                          <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
+                            <div className="flex justify-between items-center w-full min-w-[200px]">
+                              <span>{phone.phoneNumber}</span>
+                              <span
+                                  className={`text-xs ml-2 ${
+                                      disabled
+                                          ? "text-destructive font-bold"
+                                          : "text-muted-foreground"
+                                  }`}
+                              >
+                        ({usage}/4 used)
+                      </span>
+                            </div>
+                          </SelectItem>
+                      )
                     })}
                   </SelectContent>
                 </Select>
@@ -423,33 +436,51 @@ export default function Dashboard() {
                     <SelectValue placeholder="Choose an IP..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {ips?.map(ip => {
-                      const usage = getIpSlotUsage(ip.id);
-                      const disabled = usage >= 4;
+                    {ips?.map((ip) => {
+                      const usage = getIpSlotUsage(ip.id)
+                      const disabled = usage >= 4
                       return (
-                        <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
-                           <div className="flex justify-between items-center w-full min-w-[200px]">
-                            <span>{ip.ipAddress}</span>
-                            <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                              ({usage}/4 used)
-                            </span>
-                          </div>
-                        </SelectItem>
-                      );
+                          <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
+                            <div className="flex justify-between items-center w-full min-w-[200px]">
+                              <span>{ip.ipAddress}</span>
+                              <span
+                                  className={`text-xs ml-2 ${
+                                      disabled
+                                          ? "text-destructive font-bold"
+                                          : "text-muted-foreground"
+                                  }`}
+                              >
+                        ({usage}/4 used)
+                      </span>
+                            </div>
+                          </SelectItem>
+                      )
                     })}
                   </SelectContent>
                 </Select>
               </div>
             </div>
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSlotDialogOpen(false)} data-testid="button-cancel-allocation">Cancel</Button>
-            <Button onClick={handleCreateSlot} disabled={createSlotMutation.isPending} data-testid="button-confirm-allocation">
+            <Button
+                variant="outline"
+                onClick={() => setIsSlotDialogOpen(false)}
+                data-testid="button-cancel-allocation"
+            >
+              Cancel
+            </Button>
+            <Button
+                onClick={handleCreateSlot}
+                disabled={createSlotMutation.isPending}
+                data-testid="button-confirm-allocation"
+            >
               {createSlotMutation.isPending ? "Creating..." : "Confirm Allocation"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* Phone Details Dialog */}
       <Dialog open={!!detailPhone} onOpenChange={(open) => !open && setDetailPhone(null)}>

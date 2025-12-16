@@ -10,8 +10,8 @@ import { useStore } from "@/lib/store";
 
 // Simple demo credentials (client-side validation only).
 // In a real app this should be validated server-side.
-const DEMO_USERNAME = "admin";
-const DEMO_PASSWORD = "admin";
+const DEMO_USERNAME = "ashik";
+const DEMO_PASSWORD = "Dev11224411";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
