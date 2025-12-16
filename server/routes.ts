@@ -107,7 +107,13 @@ export async function registerRoutes(
 
   app.post("/api/ips", async (req, res) => {
     try {
-      const data = insertIpSchema.parse(req.body);
+      // Apply defaults if missing
+      const body = { ...req.body };
+      if (!body.username) body.username = "ashik";
+      if (!body.password) body.password = "11224411";
+      if (!body.port) body.port = "9001";
+
+      const data = insertIpSchema.parse(body);
       const ip = await storage.createIp(data);
       res.status(201).json(ip);
     } catch (error: any) {

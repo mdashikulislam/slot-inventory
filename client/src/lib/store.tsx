@@ -115,6 +115,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const logout = () => setState(prev => ({ ...prev, isAuthenticated: false }));
 
   const addPhone = (data: Omit<Phone, "id" | "createdAt">) => {
+    // Require phoneNumber
+    if (!data.phoneNumber) {
+      throw new Error("Phone number is required");
+    }
+
     if (state.phones.some(p => p.phoneNumber === data.phoneNumber)) {
       throw new Error("Phone number already exists");
     }
@@ -212,7 +217,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetData = () => {
-    setState({ ...INITIAL_STATE, isAuthenticated: true }); // Keep logged in
+    // Reset to initial demo data but preserve authentication state (do not auto-login)
+    setState(prev => ({ ...INITIAL_STATE, isAuthenticated: prev.isAuthenticated }));
   };
 
   return (

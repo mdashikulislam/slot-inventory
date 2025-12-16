@@ -32,9 +32,9 @@ export default function IpsPage() {
     resolver: zodResolver(insertIpSchema),
     defaultValues: {
       ipAddress: "",
-      port: "",
-      username: "",
-      password: "",
+      port: "9001",
+      username: "ashik",
+      password: "11224411",
       provider: "",
       remark: "",
     },
@@ -85,9 +85,9 @@ export default function IpsPage() {
     setEditingId(null);
     form.reset({
       ipAddress: "",
-      port: "",
-      username: "",
-      password: "",
+      port: "9001",
+      username: "ashik",
+      password: "11224411",
       provider: "",
       remark: "",
     });
