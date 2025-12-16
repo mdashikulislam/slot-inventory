@@ -338,7 +338,7 @@ export default function Dashboard() {
                           <div className="flex flex-col items-end gap-1.5">
                              <div className="flex items-center gap-2 text-xs">
                                 <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-ip-usage-${ip.id}`}>
-                                  {usage} <span className="text-destructive font-normal">/ 4</span>
+                                  {4 - usage} <span className="text-destructive font-normal">/ 4</span>
                                 </span>
                              </div>
                              <Progress 
