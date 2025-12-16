@@ -454,14 +454,17 @@ export default function Dashboard() {
             <div>
               <div className="grid gap-2">
                 <Label htmlFor="count">Slot Count</Label>
-                <Input
-                    id="count"
-                    type="number"
-                    min="1"
-                    value={slotCount}
-                    onChange={(e) => setSlotCount(parseInt(e.target.value) || 1)}
-                    data-testid="input-slot-count"
-                />
+                <Select onValueChange={(v) => setSlotCount(parseInt(v || '1'))} value={String(slotCount)}>
+                  <SelectTrigger data-testid="select-slot-count">
+                    <SelectValue placeholder="Slots" />
+                  </SelectTrigger>
+                  <SelectContent className="min-w-[120px]">
+                    <SelectItem value="1">1</SelectItem>
+                    <SelectItem value="2">2</SelectItem>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="4">4</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid gap-2 mt-4">
@@ -470,63 +473,81 @@ export default function Dashboard() {
                   <SelectTrigger data-testid="select-phone">
                     <SelectValue placeholder="Choose a phone..." />
                   </SelectTrigger>
-                  <SelectContent>
-                    <div className="p-2">
-                      <Input placeholder="Search phones..." value={phoneSelectQuery} onChange={(e) => setPhoneSelectQuery(e.target.value)} className="mb-2" />
+                  <SelectContent className="min-w-[260px]">
+                    <div className="sticky top-0 z-10 bg-popover p-2">
+                      <Input
+                        placeholder="Search phones..."
+                        value={phoneSelectQuery}
+                        onChange={(e) => setPhoneSelectQuery(e.target.value)}
+                        className="mb-2"
+                        data-testid="input-select-search-phone"
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
                     </div>
-                    {selectablePhones.map(phone => {
-                       const usage = getPhoneSlotUsage(phone.id);
-                       const disabled = usage >= 4;
-                       return (
-                         <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
-                           <div className="flex justify-between items-center w-full min-w-[200px]">
-                             <div className="flex flex-col">
-                               <span className="font-mono">{phone.phoneNumber}</span>
-                               {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{phone.remark}</span>}
-                             </div>
-                             <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                               ({usage}/4 used)
-                             </span>
-                           </div>
-                         </SelectItem>
-                       );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2 mt-4">
-                <Label htmlFor="ip">Select IP Address</Label>
-                <Select onValueChange={setSelectedIpId} value={selectedIpId}>
-                  <SelectTrigger data-testid="select-ip">
-                    <SelectValue placeholder="Choose an IP..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <div className="p-2">
-                      <Input placeholder="Search IPs..." value={ipSelectQuery} onChange={(e) => setIpSelectQuery(e.target.value)} className="mb-2" />
-                    </div>
-                    {selectableIps.map(ip => {
-                       const usage = getIpSlotUsage(ip.id);
-                       const disabled = usage >= 4;
-                       return (
-                         <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
+                    <div className="max-h-[260px] overflow-y-auto py-1">
+                      {selectablePhones.map(phone => {
+                        const usage = getPhoneSlotUsage(phone.id);
+                        const disabled = usage >= 4;
+                        return (
+                          <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
                             <div className="flex justify-between items-center w-full min-w-[200px]">
-                             <div className="flex flex-col">
-                               <span className="font-mono">{ip.ipAddress}</span>
-                               {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{ip.remark}</span>}
-                             </div>
-                             <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                               ({usage}/4 used)
-                             </span>
-                           </div>
-                         </SelectItem>
-                       );
-                    })}
+                              <div className="flex flex-col">
+                                <span className="font-mono">{phone.phoneNumber}</span>
+                                {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{phone.remark}</span>}
+                              </div>
+                              <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                                ({usage}/4 used)
+                              </span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </div>
                   </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
+                 </Select>
+               </div>
+
+               <div className="grid gap-2 mt-4">
+                 <Label htmlFor="ip">Select IP Address</Label>
+                 <Select onValueChange={setSelectedIpId} value={selectedIpId}>
+                   <SelectTrigger data-testid="select-ip">
+                     <SelectValue placeholder="Choose an IP..." />
+                   </SelectTrigger>
+                   <SelectContent className="min-w-[260px]">
+                     <div className="sticky top-0 z-10 bg-popover p-2">
+                       <Input
+                         placeholder="Search IPs..."
+                         value={ipSelectQuery}
+                         onChange={(e) => setIpSelectQuery(e.target.value)}
+                         className="mb-2"
+                         data-testid="input-select-search-ip"
+                         onKeyDown={(e) => e.stopPropagation()}
+                       />
+                     </div>
+                     <div className="max-h-[260px] overflow-y-auto py-1">
+                       {selectableIps.map(ip => {
+                         const usage = getIpSlotUsage(ip.id);
+                         const disabled = usage >= 4;
+                         return (
+                           <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
+                             <div className="flex justify-between items-center w-full min-w-[200px]">
+                               <div className="flex flex-col">
+                                 <span className="font-mono">{ip.ipAddress}</span>
+                                 {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{ip.remark}</span>}
+                               </div>
+                               <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                                 ({usage}/4 used)
+                               </span>
+                             </div>
+                           </SelectItem>
+                         );
+                       })}
+                     </div>
+                   </SelectContent>
+                 </Select>
+               </div>
+             </div>
+           </div>
 
           <DialogFooter>
             <Button
