@@ -25,7 +25,10 @@ export default function Dashboard() {
   const deleteSlotMutation = useDeleteSlot();
   
   const [isSlotDialogOpen, setIsSlotDialogOpen] = useState(false);
-  
+  // Select search states for allocation dropdowns (helps with large lists)
+  const [phoneSelectQuery, setPhoneSelectQuery] = useState("");
+  const [ipSelectQuery, setIpSelectQuery] = useState("");
+
   // Details Dialog State
   const [detailPhone, setDetailPhone] = useState<Phone | null>(null);
   const [detailIp, setDetailIp] = useState<Ip | null>(null);
@@ -113,6 +116,13 @@ export default function Dashboard() {
         if (phoneFilter === "available") return usage < 4;
         if (phoneFilter === "used") return usage > 0;
         return true;
+      })
+      // Sort by usage ascending (most free first), then by phoneNumber
+      .sort((a, b) => {
+        const ua = getPhoneSlotUsage(a.id);
+        const ub = getPhoneSlotUsage(b.id);
+        if (ua !== ub) return ua - ub;
+        return a.phoneNumber.localeCompare(b.phoneNumber);
       });
   }, [phones, searchQuery, phoneFilter, slots]);
 
@@ -128,8 +138,46 @@ export default function Dashboard() {
         if (ipFilter === "available") return usage < 4;
         if (ipFilter === "used") return usage > 0;
         return true;
+      })
+      // Sort by usage ascending (most free first), then by ipAddress
+      .sort((a, b) => {
+        const ua = getIpSlotUsage(a.id);
+        const ub = getIpSlotUsage(b.id);
+        if (ua !== ub) return ua - ub;
+        return a.ipAddress.localeCompare(b.ipAddress);
       });
   }, [ips, searchQuery, ipFilter, slots]);
+
+  // Selectable lists for allocation dropdowns (apply separate small search & order by free)
+  const selectablePhones = useMemo(() => {
+    if (!phones) return [];
+    return phones
+      .filter(p =>
+        p.phoneNumber.toLowerCase().includes(phoneSelectQuery.toLowerCase()) ||
+        p.remark?.toLowerCase().includes(phoneSelectQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        const ua = getPhoneSlotUsage(a.id);
+        const ub = getPhoneSlotUsage(b.id);
+        if (ua !== ub) return ua - ub;
+        return a.phoneNumber.localeCompare(b.phoneNumber);
+      });
+  }, [phones, phoneSelectQuery, slots]);
+
+  const selectableIps = useMemo(() => {
+    if (!ips) return [];
+    return ips
+      .filter(i =>
+        i.ipAddress.includes(ipSelectQuery) ||
+        i.remark?.toLowerCase().includes(ipSelectQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        const ua = getIpSlotUsage(a.id);
+        const ub = getIpSlotUsage(b.id);
+        if (ua !== ub) return ua - ub;
+        return a.ipAddress.localeCompare(b.ipAddress);
+      });
+  }, [ips, ipSelectQuery, slots]);
 
   // Metrics
   const totalPhones = phones?.length || 0;
@@ -423,25 +471,25 @@ export default function Dashboard() {
                     <SelectValue placeholder="Choose a phone..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {phones?.map((phone) => {
-                      const usage = getPhoneSlotUsage(phone.id)
-                      const disabled = usage >= 4
-                      return (
-                          <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
-                            <div className="flex justify-between items-center w-full min-w-[200px]">
-                              <span>{phone.phoneNumber}</span>
-                              <span
-                                  className={`text-xs ml-2 ${
-                                      disabled
-                                          ? "text-destructive font-bold"
-                                          : "text-muted-foreground"
-                                  }`}
-                              >
-                        ({usage}/4 used)
-                      </span>
-                            </div>
-                          </SelectItem>
-                      )
+                    <div className="p-2">
+                      <Input placeholder="Search phones..." value={phoneSelectQuery} onChange={(e) => setPhoneSelectQuery(e.target.value)} className="mb-2" />
+                    </div>
+                    {selectablePhones.map(phone => {
+                       const usage = getPhoneSlotUsage(phone.id);
+                       const disabled = usage >= 4;
+                       return (
+                         <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
+                           <div className="flex justify-between items-center w-full min-w-[200px]">
+                             <div className="flex flex-col">
+                               <span className="font-mono">{phone.phoneNumber}</span>
+                               {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{phone.remark}</span>}
+                             </div>
+                             <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                               ({usage}/4 used)
+                             </span>
+                           </div>
+                         </SelectItem>
+                       );
                     })}
                   </SelectContent>
                 </Select>
@@ -454,25 +502,25 @@ export default function Dashboard() {
                     <SelectValue placeholder="Choose an IP..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {ips?.map((ip) => {
-                      const usage = getIpSlotUsage(ip.id)
-                      const disabled = usage >= 4
-                      return (
-                          <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
+                    <div className="p-2">
+                      <Input placeholder="Search IPs..." value={ipSelectQuery} onChange={(e) => setIpSelectQuery(e.target.value)} className="mb-2" />
+                    </div>
+                    {selectableIps.map(ip => {
+                       const usage = getIpSlotUsage(ip.id);
+                       const disabled = usage >= 4;
+                       return (
+                         <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
                             <div className="flex justify-between items-center w-full min-w-[200px]">
-                              <span>{ip.ipAddress}</span>
-                              <span
-                                  className={`text-xs ml-2 ${
-                                      disabled
-                                          ? "text-destructive font-bold"
-                                          : "text-muted-foreground"
-                                  }`}
-                              >
-                        ({usage}/4 used)
-                      </span>
-                            </div>
-                          </SelectItem>
-                      )
+                             <div className="flex flex-col">
+                               <span className="font-mono">{ip.ipAddress}</span>
+                               {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{ip.remark}</span>}
+                             </div>
+                             <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                               ({usage}/4 used)
+                             </span>
+                           </div>
+                         </SelectItem>
+                       );
                     })}
                   </SelectContent>
                 </Select>
