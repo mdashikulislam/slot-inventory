@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import Layout from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import type { InsertPhone, Phone } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { usePhones, useCreatePhone, useUpdatePhone, useDeletePhone, usePhoneSlotUsage } from "@/hooks/use-data";
+import { usePhones, useCreatePhone, useUpdatePhone, useDeletePhone } from "@/hooks/use-data";
 import { useSlots } from "@/hooks/use-data";
 
 export default function PhonesPage() {
