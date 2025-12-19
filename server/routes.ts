@@ -186,14 +186,18 @@ export async function registerRoutes(
   app.post("/api/slots", async (req, res) => {
     try {
       const body = { ...req.body };
+      // Normalize usedAt
       if (typeof body.usedAt === "string") {
         body.usedAt = new Date(body.usedAt);
       }
+      // Normalize ids: treat empty string as undefined
+      if (typeof body.phoneId === 'string' && body.phoneId.trim() === '') delete body.phoneId;
+      if (typeof body.ipId === 'string' && body.ipId.trim() === '') delete body.ipId;
       const data = insertSlotSchema.parse(body);
       const count = data.count ?? 1;
       
       // Check phone usage only if phoneId provided
-      if (data.phoneId) {
+      if (data.phoneId && typeof data.phoneId === 'string') {
         const phoneUsage = await storage.getPhoneSlotUsage(data.phoneId);
         if (phoneUsage + count > 4) {
           return res.status(400).json({ 
@@ -203,7 +207,7 @@ export async function registerRoutes(
       }
 
       // Check IP usage only if ipId provided
-      if (data.ipId) {
+      if (data.ipId && typeof data.ipId === 'string') {
         const ipUsage = await storage.getIpSlotUsage(data.ipId);
         if (ipUsage + count > 4) {
           return res.status(400).json({ 

@@ -43,8 +43,9 @@ export default function Dashboard() {
 
   // Dashboard Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [phoneFilter, setPhoneFilter] = useState<"all" | "used" | "available">("all");
-  const [ipFilter, setIpFilter] = useState<"all" | "used" | "available">("all");
+  // Filters: all, used (full), partial (some used), free (no usage)
+  const [phoneFilter, setPhoneFilter] = useState<"all" | "used" | "partial" | "free">("all");
+  const [ipFilter, setIpFilter] = useState<"all" | "used" | "partial" | "free">("all");
 
   // Helper function to calculate slot usage within 15 days
   const getPhoneSlotUsage = (phoneId: string): number => {
@@ -85,10 +86,10 @@ export default function Dashboard() {
     }
     
     try {
-      // Create payload only for the chosen type. Cast to any because server/schema may vary.
-      const payload: any = allocationType === 'phone'
-        ? { phoneId: selectedPhoneId, ipId: "", count: slotCount, usedAt: selectedDate }
-        : { phoneId: "", ipId: selectedIpId, count: slotCount, usedAt: selectedDate };
+      // Build payload and omit unused id; send usedAt as ISO string
+      const payload: any = { count: slotCount, usedAt: selectedDate.toISOString() };
+      if (allocationType === 'phone') payload.phoneId = selectedPhoneId;
+      else payload.ipId = selectedIpId;
 
       await createSlotMutation.mutateAsync(payload);
 
@@ -125,8 +126,9 @@ export default function Dashboard() {
       )
       .filter(p => {
         const usage = getPhoneSlotUsage(p.id);
-        if (phoneFilter === "available") return usage < 4;
-        if (phoneFilter === "used") return usage > 0;
+        if (phoneFilter === "free") return usage === 0;
+        if (phoneFilter === "used") return usage >= 4;
+        if (phoneFilter === "partial") return usage > 0 && usage < 4;
         return true;
       })
       // Sort by usage ascending (most free first), then by phoneNumber
@@ -147,8 +149,9 @@ export default function Dashboard() {
       )
       .filter(i => {
         const usage = getIpSlotUsage(i.id);
-        if (ipFilter === "available") return usage < 4;
-        if (ipFilter === "used") return usage > 0;
+        if (ipFilter === "free") return usage === 0;
+        if (ipFilter === "used") return usage >= 4;
+        if (ipFilter === "partial") return usage > 0 && usage < 4;
         return true;
       })
       // Sort by usage ascending (most free first), then by ipAddress
@@ -211,6 +214,27 @@ export default function Dashboard() {
     );
   }
 
+  // Export IP slots as CSV
+  const exportIpCsv = (ip: Ip) => {
+    if (!slots) return;
+    const rows = slots.filter(s => s.ipId === ip.id).map(s => ({
+      date: format(new Date(s.usedAt), 'yyyy-MM-dd'),
+      count: s.count || 1,
+      phoneId: s.phoneId || "",
+    }));
+    const header = ['date','count','phoneId'];
+    const csv = [header.join(',')].concat(rows.map(r => `${r.date},${r.count},${r.phoneId}`)).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ip-${ip.ipAddress.replace(/[:\\/\\\\]/g,'_')}-slots.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Layout>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -261,7 +285,8 @@ export default function Dashboard() {
                 <ToggleGroup type="single" value={phoneFilter} onValueChange={(v) => v && setPhoneFilter(v as any)} className="justify-start" aria-label="Phone filter">
                   <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
                   <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
-                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="partial">Partial</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="free">Free</ToggleGroupItem>
                 </ToggleGroup>
               </div>
             </div>
@@ -353,8 +378,23 @@ export default function Dashboard() {
                 <ToggleGroup type="single" value={ipFilter} onValueChange={(v) => v && setIpFilter(v as any)} className="justify-start" aria-label="IP filter">
                   <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
                   <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
-                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="partial">Partial</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="free">Free</ToggleGroupItem>
                 </ToggleGroup>
+                <Button variant="outline" size="sm" onClick={() => {
+                  // Build TXT export identical to IPs page
+                  const lines = filteredIps.map(ip => [ip.ipAddress, ip.port || "", ip.username || "", ip.password || ""].join(':'));
+                  const txt = lines.join('\n');
+                  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `ips_export_dashboard_${ipFilter}_${new Date().toISOString().split('T')[0]}.txt`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                }} title="Export TXT">Export .txt</Button>
               </div>
             </div>
           </CardHeader>
@@ -661,6 +701,8 @@ export default function Dashboard() {
                {detailIp?.ipAddress}
              </DialogDescription>
            </DialogHeader>
+           {/* No export buttons in IP Usage Details as requested */}
+           <div className="px-4 pb-2" />
            <div className="py-2">
               <Table>
                 <TableHeader>
@@ -680,8 +722,13 @@ export default function Dashboard() {
                     ?.filter(s => s.ipId === detailIp.id)
                     .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())
                     .map(slot => {
-                      return (
-                        <TableRow key={slot.id} className="h-10 hover:bg-muted/30">
+                      // ageDays: number of days since usedAt
+                      const ageMs = Date.now() - new Date(slot.usedAt).getTime();
+                      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+                      // within 15 days => highlight light red; otherwise light green
+                      const rowBgClass = ageDays < 15 ? 'bg-red-50' : 'bg-green-50';
+                       return (
+                        <TableRow key={slot.id} className={`h-10 hover:bg-muted/30 ${rowBgClass}`}>
                          <TableCell className="text-xs py-1 text-muted-foreground">{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
                          <TableCell className="text-right font-medium text-xs py-1">{slot.count || 1}</TableCell>
                           <TableCell className="py-1">
@@ -697,8 +744,8 @@ export default function Dashboard() {
                             </Button>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
+                       );
+                     })}
                 </TableBody>
               </Table>
            </div>
