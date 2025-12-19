@@ -310,7 +310,7 @@ export default function Dashboard() {
         <MetricCard title="Available IPs" value={availableIps} icon={CheckCircle2} color="border-teal-500" />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 h-[650px]">
+      <div className="grid gap-6 md:grid-cols-[40%_60%] h-[650px]">
         {/* Phone List */}
         <Card className="col-span-1 shadow-sm flex flex-col h-full overflow-hidden border bg-card/50">
           <CardHeader className="bg-muted/20 pb-3 py-4 border-b">
@@ -350,7 +350,7 @@ export default function Dashboard() {
                 <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent border-b border-border/60">
                     <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">Device</TableHead>
-                    <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">Slots Used (15d)</TableHead>
+                    <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">Slots Available (15d)</TableHead>
                     <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-6">Capacity</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -377,7 +377,7 @@ export default function Dashboard() {
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               usage >= 4 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                           }`} data-testid={`badge-usage-${phone.id}`}>
-                          {usage}
+                          {4 - usage}
                         </span>
                         </TableCell>
                         <TableCell className="text-right pr-6">
@@ -386,13 +386,11 @@ export default function Dashboard() {
                                 <span
                                     className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"}
                                     data-testid={`text-phone-usage-${phone.id}`}>
-                                  {4 - usage} <span className="text-destructive font-normal">/ 4</span>
+                                  {usage} <span className="text-destructive font-normal">/ 4</span>
                                 </span>
                              </div>
-                             <Progress 
-                                value={percentage} 
-                                className={`h-1.5 w-24 bg-green-500 ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-blue-500'}`}
-                              />
+
+                            <Progress value={percentage} className={`h-1.5 w-24 ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-indigo-500'}`} />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -400,7 +398,7 @@ export default function Dashboard() {
                   })}
                   {filteredPhones.length === 0 && (
                      <TableRow>
-                       <TableCell colSpan={2} className="h-32 text-center">
+                       <TableCell colSpan={3} className="h-32 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Smartphone className="h-8 w-8 opacity-20" />
                             <span className="text-sm">No phones found</span>
@@ -483,7 +481,7 @@ export default function Dashboard() {
                       </TableHead>
                       <TableHead className="w-[220px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">IP Address</TableHead>
                       <TableHead className="w-[160px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Provider</TableHead>
-                      <TableHead className="w-[140px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Slots (15d)</TableHead>
+                      <TableHead className="w-[140px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Slot Available (15d)</TableHead>
                       <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-6">Capacity</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -494,24 +492,24 @@ export default function Dashboard() {
                       const percentage = Math.min((usage / 4) * 100, 100);
 
                       return (
-                        <TableRow key={ip.id} className="hover:bg-muted/40 transition-colors h-14 border-b border-border/40 group" data-testid={`row-ip-${ip.id}`}>
+                        <TableRow key={ip.id} className="hover:bg-muted/40 cursor-pointer transition-colors h-14 border-b border-border/40 group" data-testid={`row-ip-${ip.id}`}>
                           <TableCell className="pl-3 align-middle">
                             <input type="checkbox" checked={!!selectedIpIds[ip.id]} onChange={() => toggleIpSelect(ip.id)} onClick={(e) => e.stopPropagation()} aria-label={`select-${ip.id}`} />
                           </TableCell>
                           <TableCell className="pl-2 font-medium align-middle" onClick={() => setDetailIp(ip)}>
                             <div className="flex flex-col gap-0.5">
                               <span className="text-sm font-mono text-foreground/90 group-hover:text-primary transition-colors" data-testid={`text-ip-address-${ip.id}`}>{ip.ipAddress}</span>
-                              {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[260px]">{ip.remark}</span>}
+                              {ip.remark && <span className="text-[10px] text-red-500 truncate max-w-[260px]">{ip.remark}</span>}
                             </div>
                           </TableCell>
                           <TableCell className="align-middle" onClick={() => setDetailIp(ip)}>{ip.provider || '-'}</TableCell>
                           <TableCell className="pl-6 align-middle cursor-pointer" onClick={() => setDetailIp(ip)}>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isFull ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`} data-testid={`badge-usage-${ip.id}`}>{usage}</span>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isFull ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`} data-testid={`badge-usage-${ip.id}`}>{4 - usage}</span>
                           </TableCell>
                           <TableCell className="text-right pr-6 align-middle">
                             <div className="flex flex-col items-end gap-1.5">
                               <div className="flex items-center gap-2 text-xs">
-                                <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-ip-usage-${ip.id}`}>{4 - usage} <span className="text-destructive font-normal">/ 4</span></span>
+                                <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-ip-usage-${ip.id}`}>{usage} <span className="text-destructive font-normal">/ 4</span></span>
                               </div>
                               <Progress value={percentage} className={`h-1.5 w-24 ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-indigo-500'}`} />
                             </div>
