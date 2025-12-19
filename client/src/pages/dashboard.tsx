@@ -43,9 +43,8 @@ export default function Dashboard() {
 
   // Dashboard Filters
   const [searchQuery, setSearchQuery] = useState("");
-  // Phone filters: slot-count and provider (we'll map provider to phone.remark)
+  // Phone filters: slot-count only (no provider)
   const [phoneSlotFilter, setPhoneSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4+">("all");
-  const [phoneProviderFilter, setPhoneProviderFilter] = useState<string>("all");
   // IP filters: slot-count and provider
   const [ipSlotFilter, setIpSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4+">("all");
   const [ipProviderFilter, setIpProviderFilter] = useState<string>("all");
@@ -123,22 +122,6 @@ export default function Dashboard() {
     }
   };
 
-  // unique phone "providers" derived from remark field (for filter dropdown)
-  const uniquePhoneProviders = useMemo<string[]>(() => {
-    if (!phones) return [];
-    const set = new Set<string>();
-    phones.forEach(p => { if (p.remark) set.add(p.remark); });
-    return Array.from(set).sort();
-  }, [phones]);
-
-  // unique providers for IPs (used in provider dropdown)
-  const uniqueProviders = useMemo<string[]>(() => {
-    if (!ips) return [];
-    const set = new Set<string>();
-    ips.forEach(i => { if (i.provider) set.add(i.provider); });
-    return Array.from(set).sort();
-  }, [ips]);
-
   const filteredPhones = useMemo(() => {
     if (!phones) return [];
     return phones
@@ -153,11 +136,6 @@ export default function Dashboard() {
         if (phoneSlotFilter === '4+') return usage >= 4;
         return usage === parseInt(phoneSlotFilter, 10);
       })
-      // apply provider (remark) filter
-      .filter(p => {
-        if (phoneProviderFilter === 'all') return true;
-        return (p.remark || '') === phoneProviderFilter;
-      })
       // Sort by usage ascending (most free first), then by phoneNumber
       .sort((a, b) => {
         const ua = getPhoneSlotUsage(a.id);
@@ -165,7 +143,7 @@ export default function Dashboard() {
         if (ua !== ub) return ua - ub;
         return a.phoneNumber.localeCompare(b.phoneNumber);
       });
-  }, [phones, searchQuery, slots, phoneSlotFilter, phoneProviderFilter]);
+  }, [phones, searchQuery, slots, phoneSlotFilter]);
 
   const filteredIps = useMemo(() => {
     if (!ips) return [];
@@ -194,6 +172,14 @@ export default function Dashboard() {
         return a.ipAddress.localeCompare(b.ipAddress);
       });
   }, [ips, searchQuery, slots, ipSlotFilter, ipProviderFilter]);
+
+  // unique providers for IPs (used in provider dropdown)
+  const uniqueProviders = useMemo<string[]>(() => {
+    if (!ips) return [];
+    const set = new Set<string>();
+    ips.forEach(i => { if (i.provider) set.add(i.provider); });
+    return Array.from(set).sort();
+  }, [ips]);
 
   // Selectable lists for allocation dropdowns (apply separate small search & order by free)
   const selectablePhones = useMemo<Phone[]>(() => {
@@ -328,7 +314,7 @@ export default function Dashboard() {
         {/* Phone List */}
         <Card className="col-span-1 shadow-sm flex flex-col h-full overflow-hidden border bg-card/50">
           <CardHeader className="bg-muted/20 pb-3 py-4 border-b">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
                   <Smartphone className="h-4 w-4" />
@@ -337,11 +323,10 @@ export default function Dashboard() {
                   <CardTitle className="text-base font-semibold tracking-tight">Phone Utilization</CardTitle>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full">
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="bg-background font-mono text-xs">{filteredPhones.length} Devices</Badge>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 ml-auto">
+
+              <div className="flex items-center gap-3 ml-auto">
+                <Badge variant="outline" className="bg-background font-mono text-xs">{filteredPhones.length} Devices</Badge>
+                <div>
                   <Select value={phoneSlotFilter} onValueChange={(v) => setPhoneSlotFilter(v as any)}>
                     <SelectTrigger className="h-8 min-w-[80px]">
                       <SelectValue placeholder="Slots" />
@@ -353,16 +338,6 @@ export default function Dashboard() {
                       <SelectItem value="2">2</SelectItem>
                       <SelectItem value="3">3</SelectItem>
                       <SelectItem value="4+">4+</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={phoneProviderFilter} onValueChange={(v) => setPhoneProviderFilter(v || 'all')}>
-                    <SelectTrigger className="h-8 min-w-[120px]">
-                      <SelectValue placeholder="Provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Providers</SelectItem>
-                      {uniquePhoneProviders.map((p: string) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -441,9 +416,10 @@ export default function Dashboard() {
 
         {/* IP List */}
         <Card className="col-span-1 shadow-sm flex flex-col h-full overflow-hidden border bg-card/50">
-          <CardHeader className="bg-muted/20 pb-3 py-4 border-b">
-            <div className="flex items-center justify-between">
-               <div className="flex items-center gap-2">
+          <CardHeader className="bg-muted/20 pb-2 pt-3 px-4 border-b">
+            {/* Row 1: Title left, count right */}
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-md text-indigo-600 dark:text-indigo-400">
                   <Network className="h-4 w-4" />
                 </div>
@@ -451,39 +427,42 @@ export default function Dashboard() {
                   <CardTitle className="text-base font-semibold tracking-tight">IP Utilization</CardTitle>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full">
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className="bg-background font-mono text-xs">{filteredIps.length} IPs</Badge>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 ml-auto">
-                  <Select value={ipSlotFilter} onValueChange={(v) => setIpSlotFilter(v as any)}>
-                    <SelectTrigger className="h-8 min-w-[80px]">
-                      <SelectValue placeholder="Slots" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="0">0</SelectItem>
-                      <SelectItem value="1">1</SelectItem>
-                      <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="4+">4+</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="flex items-center">
+                <Badge variant="outline" className="bg-background font-mono text-xs">{filteredIps.length} IPs</Badge>
+              </div>
+            </div>
 
-                  <Select value={ipProviderFilter} onValueChange={(v) => setIpProviderFilter(v || 'all')}>
-                    <SelectTrigger className="h-8 min-w-[120px]">
-                      <SelectValue placeholder="Provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Providers</SelectItem>
-                      {uniqueProviders.map((p: string) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-
-                  <Button variant="outline" size="sm" onClick={exportSelectedTxt} title="Export Selected" disabled={!Object.values(selectedIpIds).some(Boolean)} data-testid="button-export-selected">
-                    Export Selected
-                  </Button>
-                </div>
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 w-full">
+              <div className="flex-1 items-center gap-2">
+                <Select value={ipSlotFilter} onValueChange={(v) => setIpSlotFilter(v as any)}>
+                  <SelectTrigger className="h-8 min-w-[90px]">
+                    <SelectValue placeholder="Slots" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="0">0</SelectItem>
+                    <SelectItem value="1">1</SelectItem>
+                    <SelectItem value="2">2</SelectItem>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="4+">4+</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 items-center gap-2">
+                <Select value={ipProviderFilter} onValueChange={(v) => setIpProviderFilter(v || 'all')}>
+                  <SelectTrigger className="h-8 min-w-[140px]">
+                    <SelectValue placeholder="Provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Providers</SelectItem>
+                    {uniqueProviders.map((p: string) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 items-center  ">
+                <Button className="w-full" variant="outline" size="sm" onClick={exportSelectedTxt} title="Export Selected" disabled={!Object.values(selectedIpIds).some(Boolean)} data-testid="button-export-selected">
+                  Export Selected
+                </Button>
               </div>
             </div>
           </CardHeader>
