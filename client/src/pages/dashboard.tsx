@@ -46,6 +46,12 @@ export default function Dashboard() {
   // Filters: all, used (full), partial (some used), free (no usage)
   const [phoneFilter, setPhoneFilter] = useState<"all" | "used" | "partial" | "free">("all");
   const [ipFilter, setIpFilter] = useState<"all" | "used" | "partial" | "free">("all");
+  // New IP-specific filters: slot number and provider
+  const [ipSlotFilter, setIpSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4+">("all");
+  const [ipProviderFilter, setIpProviderFilter] = useState<string>("all");
+
+  // Selection state for exporting specific IPs (checkboxes)
+  const [selectedIpIds, setSelectedIpIds] = useState<Record<string, boolean>>({});
 
   // Helper function to calculate slot usage within 15 days
   const getPhoneSlotUsage = (phoneId: string): number => {
@@ -154,6 +160,18 @@ export default function Dashboard() {
         if (ipFilter === "partial") return usage > 0 && usage < 4;
         return true;
       })
+      // apply slot-count filter if any
+      .filter(i => {
+        if (ipSlotFilter === 'all') return true;
+        const usage = getIpSlotUsage(i.id);
+        if (ipSlotFilter === '4+') return usage >= 4;
+        return usage === parseInt(ipSlotFilter, 10);
+      })
+      // apply provider filter if any
+      .filter(i => {
+        if (ipProviderFilter === 'all') return true;
+        return (i.provider || '') === ipProviderFilter;
+      })
       // Sort by usage ascending (most free first), then by ipAddress
       .sort((a, b) => {
         const ua = getIpSlotUsage(a.id);
@@ -161,16 +179,21 @@ export default function Dashboard() {
         if (ua !== ub) return ua - ub;
         return a.ipAddress.localeCompare(b.ipAddress);
       });
-  }, [ips, searchQuery, ipFilter, slots]);
+  }, [ips, searchQuery, ipFilter, slots, ipSlotFilter, ipProviderFilter]);
+
+  // unique providers list for provider dropdown
+  const uniqueProviders = useMemo<string[]>(() => {
+    if (!ips) return [];
+    const set = new Set<string>();
+    ips.forEach(i => { if (i.provider) set.add(i.provider); });
+    return Array.from(set).sort();
+  }, [ips]);
 
   // Selectable lists for allocation dropdowns (apply separate small search & order by free)
-  const selectablePhones = useMemo(() => {
+  const selectablePhones = useMemo<Phone[]>(() => {
     if (!phones) return [];
     return phones
-      .filter(p =>
-        p.phoneNumber.toLowerCase().includes(phoneSelectQuery.toLowerCase()) ||
-        p.remark?.toLowerCase().includes(phoneSelectQuery.toLowerCase())
-      )
+      .filter(p => p.phoneNumber.toLowerCase().includes(phoneSelectQuery.toLowerCase()) || p.remark?.toLowerCase().includes(phoneSelectQuery.toLowerCase()))
       .sort((a, b) => {
         const ua = getPhoneSlotUsage(a.id);
         const ub = getPhoneSlotUsage(b.id);
@@ -179,13 +202,10 @@ export default function Dashboard() {
       });
   }, [phones, phoneSelectQuery, slots]);
 
-  const selectableIps = useMemo(() => {
+  const selectableIps = useMemo<Ip[]>(() => {
     if (!ips) return [];
     return ips
-      .filter(i =>
-        i.ipAddress.includes(ipSelectQuery) ||
-        i.remark?.toLowerCase().includes(ipSelectQuery.toLowerCase())
-      )
+      .filter(i => i.ipAddress.includes(ipSelectQuery) || i.remark?.toLowerCase().includes(ipSelectQuery.toLowerCase()))
       .sort((a, b) => {
         const ua = getIpSlotUsage(a.id);
         const ub = getIpSlotUsage(b.id);
@@ -199,6 +219,37 @@ export default function Dashboard() {
   const totalIps = ips?.length || 0;
   const availablePhones = phones?.filter(p => getPhoneSlotUsage(p.id) < 4).length || 0;
   const availableIps = ips?.filter(i => getIpSlotUsage(i.id) < 4).length || 0;
+
+  // toggle single ip selection
+  const toggleIpSelect = (id: string) => {
+    setSelectedIpIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // select/unselect all visible ips
+  const toggleSelectAllVisible = (checked: boolean) => {
+    const newMap: Record<string, boolean> = { ...selectedIpIds };
+    filteredIps.forEach(ip => { newMap[ip.id] = checked; });
+    setSelectedIpIds(newMap);
+  };
+
+  // export only checked IPs (ignoring filters) - uses current ips list and selectedIpIds map
+  const exportSelectedTxt = () => {
+    if (!ips) return toast.error('No IPs available');
+    const toExport = ips.filter(ip => selectedIpIds[ip.id]);
+    if (toExport.length === 0) return toast.error('No IPs selected');
+    const lines = toExport.map(ip => [ip.ipAddress, ip.port || "", ip.username || "", ip.password || ""].join(':'));
+    const txt = lines.join('\n');
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ips_selected_export_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${toExport.length} IPs`);
+  };
 
   const isLoading = phonesLoading || ipsLoading || slotsLoading;
 
@@ -381,20 +432,36 @@ export default function Dashboard() {
                   <ToggleGroupItem className="cursor-pointer" value="partial">Partial</ToggleGroupItem>
                   <ToggleGroupItem className="cursor-pointer" value="free">Free</ToggleGroupItem>
                 </ToggleGroup>
-                <Button variant="outline" size="sm" onClick={() => {
-                  // Build TXT export identical to IPs page
-                  const lines = filteredIps.map(ip => [ip.ipAddress, ip.port || "", ip.username || "", ip.password || ""].join(':'));
-                  const txt = lines.join('\n');
-                  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8;' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `ips_export_dashboard_${ipFilter}_${new Date().toISOString().split('T')[0]}.txt`;
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                  URL.revokeObjectURL(url);
-                }} title="Export TXT">Export .txt</Button>
+                {/* Slot number filter dropdown */}
+                <Select value={ipSlotFilter} onValueChange={(v) => setIpSlotFilter(v as any)}>
+                  <SelectTrigger className="h-8 min-w-[80px]">
+                    <SelectValue placeholder="Slots" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="0">0</SelectItem>
+                    <SelectItem value="1">1</SelectItem>
+                    <SelectItem value="2">2</SelectItem>
+                    <SelectItem value="3">3</SelectItem>
+                    <SelectItem value="4+">4+</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Provider filter dropdown */}
+                <Select value={ipProviderFilter} onValueChange={(v) => setIpProviderFilter(v || 'all')}>
+                  <SelectTrigger className="h-8 min-w-[120px]">
+                    <SelectValue placeholder="Provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Providers</SelectItem>
+                    {uniqueProviders.map((p: string) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+
+                {/* Export uses only selected checkboxes, not filters */}
+                <Button variant="outline" size="sm" onClick={exportSelectedTxt} title="Export Selected" disabled={!Object.values(selectedIpIds).some(Boolean)} data-testid="button-export-selected">
+                  Export Selected
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -403,8 +470,18 @@ export default function Dashboard() {
               <Table>
                 <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                   <TableRow className="hover:bg-transparent border-b border-border/60">
-                    <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">IP Address</TableHead>
-                    <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-6">Slots Used (15d)</TableHead>
+                   <TableHead className="w-12 h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-3">
+                     <input
+                       type="checkbox"
+                       aria-label="select all visible"
+                       checked={filteredIps.length > 0 && filteredIps.every(ip => selectedIpIds[ip.id])}
+                       onChange={(e) => toggleSelectAllVisible(e.target.checked)}
+                     />
+                   </TableHead>
+                    <TableHead className="w-[180px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">IP Address</TableHead>
+                    <TableHead className="w-[140px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Provider</TableHead>
+                    <TableHead className="w-[140px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Port</TableHead>
+                    <TableHead className="w-[140px] h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Slots Used (15d)</TableHead>
                     <TableHead className="h-10 text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-6">Capacity</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -418,16 +495,20 @@ export default function Dashboard() {
                       <TableRow 
                         key={ip.id} 
                         className="cursor-pointer hover:bg-muted/40 transition-colors h-14 border-b border-border/40 group"
-                        onClick={() => setDetailIp(ip)}
                         data-testid={`row-ip-${ip.id}`}
                       >
-                        <TableCell className="pl-6">
-                           <div className="flex flex-col gap-0.5">
+                        <TableCell className="pl-3">
+                          <input type="checkbox" checked={!!selectedIpIds[ip.id]} onChange={() => toggleIpSelect(ip.id)} onClick={(e) => e.stopPropagation()} aria-label={`select-${ip.id}`} />
+                        </TableCell>
+                        <TableCell className="pl-2 font-medium" onClick={() => setDetailIp(ip)}>
+                          <div className="flex flex-col gap-0.5">
                             <span className="text-sm font-mono text-foreground/90 group-hover:text-primary transition-colors" data-testid={`text-ip-address-${ip.id}`}>{ip.ipAddress}</span>
                             {ip.remark && <span className="text-[10px] text-destructive truncate max-w-[120px]">{ip.remark}</span>}
-                           </div>
+                          </div>
                         </TableCell>
-                        <TableCell className="pl-6 font-medium">
+                        <TableCell onClick={() => setDetailIp(ip)}>{ip.provider || '-'}</TableCell>
+                        <TableCell onClick={() => setDetailIp(ip)} className="font-mono">{ip.port || '-'}</TableCell>
+                        <TableCell className="pl-6 font-medium" onClick={() => setDetailIp(ip)}>
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                               usage >= 4 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                           }`} data-testid={`badge-usage-${ip.id}`}>
@@ -452,20 +533,20 @@ export default function Dashboard() {
                   })}
                   {filteredIps.length === 0 && (
                      <TableRow>
-                       <TableCell colSpan={2} className="h-32 text-center">
-                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                           <Network className="h-8 w-8 opacity-20" />
-                           <span className="text-sm">No IPs found</span>
-                         </div>
+                       <TableCell colSpan={6} className="h-32 text-center">
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <Network className="h-8 w-8 opacity-20" />
+                            <span className="text-sm">No IPs found</span>
+                          </div>
                        </TableCell>
                      </TableRow>
                   )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </div>
+             </TableBody>
+           </Table>
+         </ScrollArea>
+       </CardContent>
+     </Card>
+   </div>
 
       <Dialog open={isSlotDialogOpen} onOpenChange={setIsSlotDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
