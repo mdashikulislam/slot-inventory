@@ -25,6 +25,8 @@ export default function Dashboard() {
   const deleteSlotMutation = useDeleteSlot();
   
   const [isSlotDialogOpen, setIsSlotDialogOpen] = useState(false);
+  // Allocation type: phone or ip (independent allocations)
+  const [allocationType, setAllocationType] = useState<'phone' | 'ip'>('phone');
   // Select search states for allocation dropdowns (helps with large lists)
   const [phoneSelectQuery, setPhoneSelectQuery] = useState("");
   const [ipSelectQuery, setIpSelectQuery] = useState("");
@@ -41,8 +43,9 @@ export default function Dashboard() {
 
   // Dashboard Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [phoneFilter, setPhoneFilter] = useState<"all" | "used" | "available">("all");
-  const [ipFilter, setIpFilter] = useState<"all" | "used" | "available">("all");
+  // Filters: all, used (full), partial (some used), free (no usage)
+  const [phoneFilter, setPhoneFilter] = useState<"all" | "used" | "partial" | "free">("all");
+  const [ipFilter, setIpFilter] = useState<"all" | "used" | "partial" | "free">("all");
 
   // Helper function to calculate slot usage within 15 days
   const getPhoneSlotUsage = (phoneId: string): number => {
@@ -68,19 +71,28 @@ export default function Dashboard() {
   };
 
   const handleCreateSlot = async () => {
-    if (!selectedPhoneId || !selectedIpId || !selectedDate) {
-      toast.error("Please fill in all fields");
+    // Validate depending on allocation type (phone or ip)
+    if (allocationType === 'phone' && !selectedPhoneId) {
+      toast.error('Please select a phone');
+      return;
+    }
+    if (allocationType === 'ip' && !selectedIpId) {
+      toast.error('Please select an IP');
+      return;
+    }
+    if (!selectedDate) {
+      toast.error('Please select a date');
       return;
     }
     
     try {
-      await createSlotMutation.mutateAsync({
-        phoneId: selectedPhoneId,
-        ipId: selectedIpId,
-        count: slotCount,
-        usedAt: selectedDate,
-      });
-      
+      // Build payload and omit unused id; send usedAt as ISO string
+      const payload: any = { count: slotCount, usedAt: selectedDate.toISOString() };
+      if (allocationType === 'phone') payload.phoneId = selectedPhoneId;
+      else payload.ipId = selectedIpId;
+
+      await createSlotMutation.mutateAsync(payload);
+
       toast.success("Slot allocation created successfully");
       setIsSlotDialogOpen(false);
       // Reset form
@@ -88,6 +100,7 @@ export default function Dashboard() {
       setSelectedIpId("");
       setSlotCount(1);
       setSelectedDate(new Date());
+      setAllocationType('phone');
     } catch (error) {
       toast.error("Failed to create slot allocation");
     }
@@ -113,8 +126,9 @@ export default function Dashboard() {
       )
       .filter(p => {
         const usage = getPhoneSlotUsage(p.id);
-        if (phoneFilter === "available") return usage < 4;
-        if (phoneFilter === "used") return usage > 0;
+        if (phoneFilter === "free") return usage === 0;
+        if (phoneFilter === "used") return usage >= 4;
+        if (phoneFilter === "partial") return usage > 0 && usage < 4;
         return true;
       })
       // Sort by usage ascending (most free first), then by phoneNumber
@@ -135,8 +149,9 @@ export default function Dashboard() {
       )
       .filter(i => {
         const usage = getIpSlotUsage(i.id);
-        if (ipFilter === "available") return usage < 4;
-        if (ipFilter === "used") return usage > 0;
+        if (ipFilter === "free") return usage === 0;
+        if (ipFilter === "used") return usage >= 4;
+        if (ipFilter === "partial") return usage > 0 && usage < 4;
         return true;
       })
       // Sort by usage ascending (most free first), then by ipAddress
@@ -199,6 +214,27 @@ export default function Dashboard() {
     );
   }
 
+  // Export IP slots as CSV
+  const exportIpCsv = (ip: Ip) => {
+    if (!slots) return;
+    const rows = slots.filter(s => s.ipId === ip.id).map(s => ({
+      date: format(new Date(s.usedAt), 'yyyy-MM-dd'),
+      count: s.count || 1,
+      phoneId: s.phoneId || "",
+    }));
+    const header = ['date','count','phoneId'];
+    const csv = [header.join(',')].concat(rows.map(r => `${r.date},${r.count},${r.phoneId}`)).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ip-${ip.ipAddress.replace(/[:\\/\\\\]/g,'_')}-slots.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Layout>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -249,7 +285,8 @@ export default function Dashboard() {
                 <ToggleGroup type="single" value={phoneFilter} onValueChange={(v) => v && setPhoneFilter(v as any)} className="justify-start" aria-label="Phone filter">
                   <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
                   <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
-                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="partial">Partial</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="free">Free</ToggleGroupItem>
                 </ToggleGroup>
               </div>
             </div>
@@ -341,8 +378,23 @@ export default function Dashboard() {
                 <ToggleGroup type="single" value={ipFilter} onValueChange={(v) => v && setIpFilter(v as any)} className="justify-start" aria-label="IP filter">
                   <ToggleGroupItem className="cursor-pointer" value="all">All</ToggleGroupItem>
                   <ToggleGroupItem className="cursor-pointer" value="used">Used</ToggleGroupItem>
-                  <ToggleGroupItem className="cursor-pointer" value="available">Available</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="partial">Partial</ToggleGroupItem>
+                  <ToggleGroupItem className="cursor-pointer" value="free">Free</ToggleGroupItem>
                 </ToggleGroup>
+                <Button variant="outline" size="sm" onClick={() => {
+                  // Build TXT export identical to IPs page
+                  const lines = filteredIps.map(ip => [ip.ipAddress, ip.port || "", ip.username || "", ip.password || ""].join(':'));
+                  const txt = lines.join('\n');
+                  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `ips_export_dashboard_${ipFilter}_${new Date().toISOString().split('T')[0]}.txt`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                }} title="Export TXT">Export .txt</Button>
               </div>
             </div>
           </CardHeader>
@@ -420,11 +472,26 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>Create Allocation</DialogTitle>
             <DialogDescription>
-              Allocate slots for a Phone and IP pair. STRICT LIMIT enforced (Max 4 slots / 15 days).
+              Allocate slots for a single Phone or IP. STRICT LIMIT enforced (Max 4 slots / 15 days).
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-6 py-4 grid-cols-1">
+            {/* Allocation type toggle */}
+            <div className="grid gap-2">
+              <Label>Allocate For</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={allocationType === 'phone' ? 'default' : 'outline'}
+                  onClick={() => setAllocationType('phone')}
+                >Phone</Button>
+                <Button
+                  variant={allocationType === 'ip' ? 'default' : 'outline'}
+                  onClick={() => setAllocationType('ip')}
+                >IP</Button>
+              </div>
+            </div>
+
             <div className="grid gap-2">
               <Label>Allocation Date</Label>
               <div className="rounded-md">
@@ -467,233 +534,237 @@ export default function Dashboard() {
                 </Select>
               </div>
 
-              <div className="grid gap-2 mt-4">
-                <Label htmlFor="phone">Select Phone</Label>
-                <Select onValueChange={setSelectedPhoneId} value={selectedPhoneId}>
-                  <SelectTrigger data-testid="select-phone">
-                    <SelectValue placeholder="Choose a phone..." />
-                  </SelectTrigger>
-                  <SelectContent className="min-w-[260px]">
-                    <div className="sticky top-0 z-10 bg-popover p-2">
-                      <Input
-                        placeholder="Search phones..."
-                        value={phoneSelectQuery}
-                        onChange={(e) => setPhoneSelectQuery(e.target.value)}
-                        className="mb-2"
-                        data-testid="input-select-search-phone"
-                        onKeyDown={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                    <div className="max-h-[260px] overflow-y-auto py-1">
-                      {selectablePhones.map(phone => {
-                        const usage = getPhoneSlotUsage(phone.id);
-                        const disabled = usage >= 4;
-                        return (
-                          <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
-                            <div className="flex justify-between items-center w-full min-w-[200px]">
-                              <div className="flex flex-col">
-                                <span className="font-mono">{phone.phoneNumber}</span>
-                                {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{phone.remark}</span>}
+              {/* Conditionally render only the relevant selector */}
+              {allocationType === 'phone' ? (
+                <div className="grid gap-2 mt-4">
+                  <Label htmlFor="phone">Select Phone</Label>
+                  <Select onValueChange={setSelectedPhoneId} value={selectedPhoneId}>
+                    <SelectTrigger data-testid="select-phone">
+                      <SelectValue placeholder="Choose a phone..." />
+                    </SelectTrigger>
+                    <SelectContent className="min-w-[260px]">
+                      <div className="sticky top-0 z-10 bg-popover p-2">
+                        <Input
+                          placeholder="Search phones..."
+                          value={phoneSelectQuery}
+                          onChange={(e) => setPhoneSelectQuery(e.target.value)}
+                          className="mb-2"
+                          data-testid="input-select-search-phone"
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div className="max-h-[420px] overflow-y-auto py-1">{/* increased height for search overflow */}
+                        {selectablePhones.map(phone => {
+                          const usage = getPhoneSlotUsage(phone.id);
+                          const disabled = usage >= 4;
+                          return (
+                            <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
+                              <div className="flex justify-between items-center w-full min-w-[200px]">
+                                <div className="flex flex-col">
+                                  <span className="font-mono">{phone.phoneNumber}</span>
+                                  {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{phone.remark}</span>}
+                                </div>
+                                <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                                  ({usage}/4 used)
+                                </span>
                               </div>
-                              <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                                ({usage}/4 used)
-                              </span>
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </div>
-                  </SelectContent>
-                 </Select>
-               </div>
-
-               <div className="grid gap-2 mt-4">
-                 <Label htmlFor="ip">Select IP Address</Label>
-                 <Select onValueChange={setSelectedIpId} value={selectedIpId}>
-                   <SelectTrigger data-testid="select-ip">
-                     <SelectValue placeholder="Choose an IP..." />
-                   </SelectTrigger>
-                   <SelectContent className="min-w-[260px]">
-                     <div className="sticky top-0 z-10 bg-popover p-2">
-                       <Input
-                         placeholder="Search IPs..."
-                         value={ipSelectQuery}
-                         onChange={(e) => setIpSelectQuery(e.target.value)}
-                         className="mb-2"
-                         data-testid="input-select-search-ip"
-                         onKeyDown={(e) => e.stopPropagation()}
-                       />
-                     </div>
-                     <div className="max-h-[260px] overflow-y-auto py-1">
-                       {selectableIps.map(ip => {
-                         const usage = getIpSlotUsage(ip.id);
-                         const disabled = usage >= 4;
-                         return (
-                           <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
-                             <div className="flex justify-between items-center w-full min-w-[200px]">
-                               <div className="flex flex-col">
-                                 <span className="font-mono">{ip.ipAddress}</span>
-                                 {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{ip.remark}</span>}
-                               </div>
-                               <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                                 ({usage}/4 used)
-                               </span>
-                             </div>
-                           </SelectItem>
-                         );
-                       })}
-                     </div>
-                   </SelectContent>
-                 </Select>
-               </div>
-             </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </div>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="grid gap-2 mt-4">
+                  <Label htmlFor="ip">Select IP Address</Label>
+                  <Select onValueChange={setSelectedIpId} value={selectedIpId}>
+                    <SelectTrigger data-testid="select-ip">
+                      <SelectValue placeholder="Choose an IP..." />
+                    </SelectTrigger>
+                    <SelectContent className="min-w-[260px]">
+                      <div className="sticky top-0 z-10 bg-popover p-2">
+                        <Input
+                          placeholder="Search IPs..."
+                          value={ipSelectQuery}
+                          onChange={(e) => setIpSelectQuery(e.target.value)}
+                          className="mb-2"
+                          data-testid="input-select-search-ip"
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div className="max-h-[420px] overflow-y-auto py-1">{/* increased height for search overflow */}
+                        {selectableIps.map(ip => {
+                          const usage = getIpSlotUsage(ip.id);
+                          const disabled = usage >= 4;
+                          return (
+                            <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
+                              <div className="flex justify-between items-center w-full min-w-[200px]">
+                                <div className="flex flex-col">
+                                  <span className="font-mono">{ip.ipAddress}</span>
+                                  {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{ip.remark}</span>}
+                                </div>
+                                <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                                  ({usage}/4 used)
+                                </span>
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </div>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
            </div>
 
-          <DialogFooter>
-            <Button
-                variant="outline"
-                onClick={() => setIsSlotDialogOpen(false)}
-                data-testid="button-cancel-allocation"
-            >
-              Cancel
-            </Button>
-            <Button
-                onClick={handleCreateSlot}
-                disabled={createSlotMutation.isPending}
-                data-testid="button-confirm-allocation"
-            >
-              {createSlotMutation.isPending ? "Creating..." : "Confirm Allocation"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+           <DialogFooter>
+             <Button
+                 variant="outline"
+                 onClick={() => setIsSlotDialogOpen(false)}
+                 data-testid="button-cancel-allocation"
+             >
+               Cancel
+             </Button>
+             <Button
+                 onClick={handleCreateSlot}
+                 disabled={createSlotMutation.isPending}
+                 data-testid="button-confirm-allocation"
+             >
+               {createSlotMutation.isPending ? "Creating..." : "Confirm Allocation"}
+             </Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
 
 
-      {/* Phone Details Dialog */}
-      <Dialog open={!!detailPhone} onOpenChange={(open) => !open && setDetailPhone(null)}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Phone Usage Details</DialogTitle>
-            <DialogDescription className="font-mono">
-              {detailPhone?.phoneNumber}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-2">
-             <Table>
-               <TableHeader>
-                 <TableRow className="h-8 hover:bg-transparent">
-                   <TableHead className="h-8 text-xs font-semibold">IP Address</TableHead>
+       {/* Phone Details Dialog */}
+       <Dialog open={!!detailPhone} onOpenChange={(open) => !open && setDetailPhone(null)}>
+         <DialogContent className="sm:max-w-[600px]">
+           <DialogHeader>
+             <DialogTitle>Phone Usage Details</DialogTitle>
+             <DialogDescription className="font-mono">
+               {detailPhone?.phoneNumber}
+             </DialogDescription>
+           </DialogHeader>
+           <div className="py-2">
+              <Table>
+                <TableHeader>
+                  <TableRow className="h-8 hover:bg-transparent">
                    <TableHead className="h-8 text-xs font-semibold">Date</TableHead>
-                   <TableHead className="text-right h-8 text-xs font-semibold">Slots</TableHead>
-                   <TableHead className="w-[40px] h-8"></TableHead>
-                 </TableRow>
-               </TableHeader>
-               <TableBody>
-                 {detailPhone && slots?.filter(s => s.phoneId === detailPhone.id).length === 0 && (
-                   <TableRow>
-                     <TableCell colSpan={4} className="text-center text-muted-foreground py-8 text-xs">No active allocations</TableCell>
-                   </TableRow>
-                 )}
-                 {detailPhone && slots
-                   ?.filter(s => s.phoneId === detailPhone.id)
-                   .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())
-                   .map(slot => {
-                     const ip = ips?.find(i => i.id === slot.ipId);
-                     return (
-                       <TableRow key={slot.id} className="h-10 hover:bg-muted/30">
-                         <TableCell className="font-mono text-xs py-1 text-foreground/80">{ip?.ipAddress || "Unknown IP"}</TableCell>
+                    <TableHead className="text-right h-8 text-xs font-semibold">Slots</TableHead>
+                    <TableHead className="w-[40px] h-8"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detailPhone && slots?.filter(s => s.phoneId === detailPhone.id).length === 0 && (
+                    <TableRow>
+                     <TableCell colSpan={3} className="text-center text-muted-foreground py-8 text-xs">No active allocations</TableCell>
+                    </TableRow>
+                  )}
+                  {detailPhone && slots
+                    ?.filter(s => s.phoneId === detailPhone.id)
+                    .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())
+                    .map(slot => {
+                      return (
+                        <TableRow key={slot.id} className="h-10 hover:bg-muted/30">
                          <TableCell className="text-xs py-1 text-muted-foreground">{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
                          <TableCell className="text-right font-medium text-xs py-1">{slot.count || 1}</TableCell>
-                         <TableCell className="py-1">
-                           <Button 
-                             variant="ghost" 
-                             size="icon" 
-                             className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10" 
-                             onClick={() => handleDeleteSlot(slot.id)}
-                             disabled={deleteSlotMutation.isPending}
-                             data-testid={`button-delete-slot-${slot.id}`}
-                           >
-                             <X className="h-3.5 w-3.5" />
-                           </Button>
-                         </TableCell>
-                       </TableRow>
-                     );
-                   })}
-               </TableBody>
-             </Table>
-          </div>
-        </DialogContent>
-      </Dialog>
+                          <TableCell className="py-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteSlot(slot.id)}
+                              disabled={deleteSlotMutation.isPending}
+                              data-testid={`button-delete-slot-${slot.id}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+           </div>
+         </DialogContent>
+       </Dialog>
 
-      {/* IP Details Dialog */}
-      <Dialog open={!!detailIp} onOpenChange={(open) => !open && setDetailIp(null)}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>IP Usage Details</DialogTitle>
-            <DialogDescription className="font-mono">
-              {detailIp?.ipAddress}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-2">
-             <Table>
-               <TableHeader>
-                 <TableRow className="h-8 hover:bg-transparent">
-                   <TableHead className="h-8 text-xs font-semibold">Phone Number</TableHead>
+       {/* IP Details Dialog */}
+       <Dialog open={!!detailIp} onOpenChange={(open) => !open && setDetailIp(null)}>
+         <DialogContent className="sm:max-w-[600px]">
+           <DialogHeader>
+             <DialogTitle>IP Usage Details</DialogTitle>
+             <DialogDescription className="font-mono">
+               {detailIp?.ipAddress}
+             </DialogDescription>
+           </DialogHeader>
+           {/* No export buttons in IP Usage Details as requested */}
+           <div className="px-4 pb-2" />
+           <div className="py-2">
+              <Table>
+                <TableHeader>
+                  <TableRow className="h-8 hover:bg-transparent">
                    <TableHead className="h-8 text-xs font-semibold">Date</TableHead>
-                   <TableHead className="text-right h-8 text-xs font-semibold">Slots</TableHead>
-                   <TableHead className="w-[40px] h-8"></TableHead>
-                 </TableRow>
-               </TableHeader>
-               <TableBody>
-                 {detailIp && slots?.filter(s => s.ipId === detailIp.id).length === 0 && (
-                   <TableRow>
-                     <TableCell colSpan={4} className="text-center text-muted-foreground py-8 text-xs">No active allocations</TableCell>
-                   </TableRow>
-                 )}
-                 {detailIp && slots
-                   ?.filter(s => s.ipId === detailIp.id)
-                   .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())
-                   .map(slot => {
-                     const phone = phones?.find(p => p.id === slot.phoneId);
-                     return (
-                       <TableRow key={slot.id} className="h-10 hover:bg-muted/30">
-                         <TableCell className="text-xs py-1 font-medium font-mono text-foreground/80">{phone?.phoneNumber || "Unknown Phone"}</TableCell>
+                    <TableHead className="text-right h-8 text-xs font-semibold">Slots</TableHead>
+                    <TableHead className="w-[40px] h-8"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detailIp && slots?.filter(s => s.ipId === detailIp.id).length === 0 && (
+                    <TableRow>
+                     <TableCell colSpan={3} className="text-center text-muted-foreground py-8 text-xs">No active allocations</TableCell>
+                    </TableRow>
+                  )}
+                  {detailIp && slots
+                    ?.filter(s => s.ipId === detailIp.id)
+                    .sort((a, b) => new Date(b.usedAt).getTime() - new Date(a.usedAt).getTime())
+                    .map(slot => {
+                      // ageDays: number of days since usedAt
+                      const ageMs = Date.now() - new Date(slot.usedAt).getTime();
+                      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+                      // within 15 days => highlight light red; otherwise light green
+                      const rowBgClass = ageDays < 15 ? 'bg-red-50' : 'bg-green-50';
+                       return (
+                        <TableRow key={slot.id} className={`h-10 hover:bg-muted/30 ${rowBgClass}`}>
                          <TableCell className="text-xs py-1 text-muted-foreground">{format(new Date(slot.usedAt), "MMM d, yyyy")}</TableCell>
                          <TableCell className="text-right font-medium text-xs py-1">{slot.count || 1}</TableCell>
-                         <TableCell className="py-1">
-                           <Button 
-                             variant="ghost" 
-                             size="icon" 
-                             className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10" 
-                             onClick={() => handleDeleteSlot(slot.id)}
-                             disabled={deleteSlotMutation.isPending}
-                             data-testid={`button-delete-slot-${slot.id}`}
-                           >
-                             <X className="h-3.5 w-3.5" />
-                           </Button>
-                         </TableCell>
-                       </TableRow>
-                     );
-                   })}
-               </TableBody>
-             </Table>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </Layout>
-  );
-}
+                          <TableCell className="py-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteSlot(slot.id)}
+                              disabled={deleteSlotMutation.isPending}
+                              data-testid={`button-delete-slot-${slot.id}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                       );
+                     })}
+                </TableBody>
+              </Table>
+           </div>
+         </DialogContent>
+       </Dialog>
+     </Layout>
+   );
+ }
 
-function MetricCard({ title, value, icon: Icon, color }: { title: string, value: number, icon: any, color: string }) {
-  return (
-    <Card className={`shadow-sm border-l-4 ${color} bg-card/50 hover:shadow-md transition-shadow`}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground/70" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold tracking-tight">{value}</div>
-      </CardContent>
-    </Card>
-  );
-}
+ function MetricCard({ title, value, icon: Icon, color }: { title: string, value: number, icon: any, color: string }) {
+   return (
+     <Card className={`shadow-sm border-l-4 ${color} bg-card/50 hover:shadow-md transition-shadow`}>
+       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+         <Icon className="h-4 w-4 text-muted-foreground/70" />
+       </CardHeader>
+       <CardContent>
+         <div className="text-2xl font-bold tracking-tight">{value}</div>
+       </CardContent>
+     </Card>
+   );
+ }
