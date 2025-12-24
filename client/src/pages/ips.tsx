@@ -5,16 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Plus, Pencil, Trash2, Download, Search, CheckCircle, XCircle } from "lucide-react";
+import { MoreHorizontal, Plus, Pencil, Trash2, Download, Search, CheckCircle, XCircle, X, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertIpSchema } from "@shared/schema";
 import type { InsertIp, Ip } from "@shared/schema";
-import { SLOT_LIMIT, getSlotCutoffDate, calculateTotalUsage, isAtCapacity } from "@shared/utils";
+import { SLOT_LIMIT, getSlotCutoffDate, calculateTotalUsage, isAtCapacity, getRemainingSlots } from "@shared/utils";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useIps, useCreateIp, useUpdateIp, useDeleteIp, useSlots } from "@/hooks/use-data";
 
 export default function IpsPage() {
@@ -28,6 +29,11 @@ export default function IpsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "available">("all");
+  const [slotFilter, setSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4">("all");
+  const [providerFilter, setProviderFilter] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const ITEMS_PER_PAGE = 10;
 
   const form = useForm<InsertIp>({
     resolver: zodResolver(insertIpSchema),
@@ -106,6 +112,27 @@ export default function IpsPage() {
     return calculateTotalUsage(relevantSlots);
   };
 
+  // Copy to clipboard
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      toast.success(`Copied: ${text}`);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      toast.error("Failed to copy");
+    }
+  };
+
+  // Get unique providers
+  const uniqueProviders = useMemo(() => {
+    const providers = new Set<string>();
+    ips.forEach(ip => {
+      if (ip.provider) providers.add(ip.provider);
+    });
+    return Array.from(providers).sort();
+  }, [ips]);
+
   const filteredIps = useMemo(() => {
     return ips.filter(ip => {
       const matchesSearch = 
@@ -115,10 +142,32 @@ export default function IpsPage() {
       
       const usage = getIpSlotUsage(ip.id);
       const matchesFilter = filterType === "all" || (filterType === "available" && !isAtCapacity(usage));
+      
+      const matchesSlot = slotFilter === 'all' || 
+        (slotFilter === '4' ? usage >= 4 : usage === parseInt(slotFilter, 10));
+      
+      const matchesProvider = providerFilter === 'all' || ip.provider === providerFilter;
 
-      return matchesSearch && matchesFilter;
+      return matchesSearch && matchesFilter && matchesSlot && matchesProvider;
+    }).sort((a, b) => {
+      const ua = getIpSlotUsage(a.id);
+      const ub = getIpSlotUsage(b.id);
+      if (ua !== ub) return ua - ub;
+      return a.ipAddress.localeCompare(b.ipAddress);
     });
-  }, [ips, searchQuery, filterType, slots]);
+  }, [ips, searchQuery, filterType, slotFilter, providerFilter, slots]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredIps.length / ITEMS_PER_PAGE);
+  const paginatedIps = filteredIps.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Reset to page 1 when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType, slotFilter, providerFilter]);
 
   const handleExport = () => {
     const lines = filteredIps.map(ip => {
@@ -159,44 +208,77 @@ export default function IpsPage() {
     <Layout>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight" data-testid="heading-ips">IP Address Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent" data-testid="heading-ips">IP Address Management</h1>
           <p className="text-muted-foreground mt-1">Manage proxies and IP addresses.</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <Button onClick={openAddDialog} className="bg-primary text-primary-foreground" data-testid="button-add-ip">
+          <Button onClick={openAddDialog} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer" data-testid="button-add-ip">
             <Plus className="mr-2 h-4 w-4" /> Add IP
           </Button>
         </div>
       </div>
 
-      <Card className="shadow-sm border-muted">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <CardTitle>Network Resources</CardTitle>
-            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+      <Card className="shadow-lg border border-slate-200 dark:border-slate-800">
+        <CardHeader className="pb-3 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950 dark:to-purple-950 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <CardTitle>Network Resources</CardTitle>
+              <Button variant="outline" onClick={handleExport} title="Export TXT" className="cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 dark:hover:bg-indigo-950" data-testid="button-export">
+                <Download className="h-4 w-4 mr-2" />
+                Export .txt
+              </Button>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full">
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input 
                   placeholder="Search IPs..." 
-                  className="pl-8" 
+                  className="pl-9 pr-9 h-9" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   data-testid="input-search"
                 />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-9 w-9 p-0 cursor-pointer hover:bg-transparent"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                  </Button>
+                )}
               </div>
+              <Select value={slotFilter} onValueChange={(v) => setSlotFilter(v as any)}>
+                <SelectTrigger className="h-9 w-full sm:w-32 cursor-pointer">
+                  <SelectValue placeholder="Slots" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Slots</SelectItem>
+                  <SelectItem value="0">0 Used</SelectItem>
+                  <SelectItem value="1">1 Used</SelectItem>
+                  <SelectItem value="2">2 Used</SelectItem>
+                  <SelectItem value="3">3 Used</SelectItem>
+                  <SelectItem value="4">4+ Used</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={providerFilter} onValueChange={setProviderFilter}>
+                <SelectTrigger className="h-9 w-full sm:w-40 cursor-pointer">
+                  <SelectValue placeholder="Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Providers</SelectItem>
+                  {uniqueProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <ToggleGroup type="single" value={filterType} onValueChange={(v) => v && setFilterType(v as any)} className="justify-start">
-                <ToggleGroupItem value="all" aria-label="All IPs" data-testid="toggle-all">
+                <ToggleGroupItem value="all" aria-label="All IPs" data-testid="toggle-all" className="cursor-pointer">
                   All
                 </ToggleGroupItem>
-                <ToggleGroupItem value="available" aria-label="Available IPs" data-testid="toggle-available">
-                  <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                <ToggleGroupItem value="available" aria-label="Available IPs" data-testid="toggle-available" className="cursor-pointer">
                   Available
                 </ToggleGroupItem>
               </ToggleGroup>
-              <Button variant="outline" onClick={handleExport} title="Export TXT" data-testid="button-export">
-                <Download className="h-4 w-4 mr-2" />
-                Export .txt
-              </Button>
             </div>
           </div>
         </CardHeader>
@@ -213,50 +295,62 @@ export default function IpsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredIps.length === 0 ? (
+              {paginatedIps.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Search className="h-8 w-8 opacity-20" />
-                      <p>No IPs found matching your filters.</p>
+                      <p>{searchQuery || slotFilter !== 'all' || providerFilter !== 'all' ? 'No IPs match your filters.' : 'No IPs found. Click "Add IP" to create one.'}</p>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredIps.map((ip) => {
+                paginatedIps.map((ip) => {
                   const usage = getIpSlotUsage(ip.id);
-                  const isFull = isAtCapacity(usage);
+                  const remaining = getRemainingSlots(usage);
                   return (
-                    <TableRow key={ip.id} className={isFull ? "bg-muted/10" : ""} data-testid={`row-ip-${ip.id}`}>
-                      <TableCell className="font-medium font-mono text-xs md:text-sm" data-testid={`text-ip-${ip.id}`}>
+                    <TableRow key={ip.id} className="group" data-testid={`row-ip-${ip.id}`}>
+                      <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          {isFull ? <XCircle className="h-3 w-3 text-red-500" /> : <CheckCircle className="h-3 w-3 text-green-500" />}
-                          {ip.ipAddress}
+                          <span className="font-mono text-xs md:text-sm" data-testid={`text-ip-${ip.id}`}>{ip.ipAddress}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            onClick={() => copyToClipboard(ip.ipAddress, `ip-${ip.id}`)}
+                          >
+                            {copiedId === `ip-${ip.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+                          </Button>
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs md:text-sm" data-testid={`text-port-${ip.id}`}>{ip.port || "-"}</TableCell>
                       <TableCell data-testid={`text-provider-${ip.id}`}>{ip.provider || "-"}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          isFull ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        }`} data-testid={`badge-usage-${ip.id}`}>
-                          {usage} / {SLOT_LIMIT}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            remaining === 0 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                            remaining >= 1 && remaining <= 3 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          }`} data-testid={`badge-usage-${ip.id}`}>
+                            {usage} / {SLOT_LIMIT}
+                          </span>
+                          <span className="text-xs text-muted-foreground">({remaining} left)</span>
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground" data-testid={`text-remark-${ip.id}`}>{ip.remark || "-"}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0" data-testid={`button-menu-${ip.id}`}>
+                            <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer" data-testid={`button-menu-${ip.id}`}>
                               <span className="sr-only">Open menu</span>
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleEdit(ip)} data-testid={`button-edit-${ip.id}`}>
+                            <DropdownMenuItem onClick={() => handleEdit(ip)} className="cursor-pointer" data-testid={`button-edit-${ip.id}`}>
                               <Pencil className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(ip.id)} className="text-destructive focus:text-destructive" data-testid={`button-delete-${ip.id}`}>
+                            <DropdownMenuItem onClick={() => handleDelete(ip.id)} className="text-destructive focus:text-destructive cursor-pointer" data-testid={`button-delete-${ip.id}`}>
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -268,6 +362,40 @@ export default function IpsPage() {
               )}
             </TableBody>
           </Table>
+          
+          {/* Pagination */}
+          {filteredIps.length > 0 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredIps.length)} of {filteredIps.length} IPs
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="cursor-pointer"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <div className="text-sm">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="cursor-pointer"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -361,8 +489,8 @@ export default function IpsPage() {
                 )}
               />
               <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel">Cancel</Button>
-                <Button type="submit" disabled={createIp.isPending || updateIp.isPending} data-testid="button-submit">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="cursor-pointer" data-testid="button-cancel">Cancel</Button>
+                <Button type="submit" disabled={createIp.isPending || updateIp.isPending} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 cursor-pointer" data-testid="button-submit">
                   {createIp.isPending || updateIp.isPending ? "Saving..." : editingId ? "Save Changes" : "Add IP"}
                 </Button>
               </DialogFooter>

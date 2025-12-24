@@ -2,7 +2,8 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { eq, and, gte, desc, sql, lt } from "drizzle-orm";
 import { subDays, startOfDay } from "date-fns";
-import { SLOT_LIMIT, SLOT_WINDOW_DAYS } from "@shared/utils";
+import { toZonedTime } from "date-fns-tz";
+import { SLOT_LIMIT, SLOT_WINDOW_DAYS, DEFAULT_TIMEZONE } from "@shared/utils";
 import { 
   type User, 
   type InsertUser,
@@ -23,6 +24,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserPassword(id: string, hashedPassword: string): Promise<void>;
 
   // Phone operations
   getPhones(): Promise<Phone[]>;
@@ -72,6 +74,10 @@ export class DbStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const result = await this.db.insert(users).values(insertUser).returning();
     return result[0];
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<void> {
+    await this.db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
   }
 
   // Phone operations
@@ -144,8 +150,11 @@ export class DbStorage implements IStorage {
   async getPhoneSlotUsage(phoneId: string, referenceDate?: Date): Promise<number> {
     // Use provided reference date or current date for consistent calculation
     const now = referenceDate || new Date();
+    // Convert to Asia/Dhaka timezone
+    const zonedDate = toZonedTime(now, DEFAULT_TIMEZONE);
     // Calculate cutoff date at start of day to avoid timezone issues
-    const cutoffDate = startOfDay(subDays(now, SLOT_WINDOW_DAYS));
+    const cutoffDate = startOfDay(subDays(zonedDate, SLOT_WINDOW_DAYS));
+    const startOfTomorrow = startOfDay(new Date(zonedDate.getTime() + 24 * 60 * 60 * 1000));
     
     const result = await this.db
       .select({ total: sql<number>`COALESCE(SUM(${slots.count}), 0)` })
@@ -154,7 +163,7 @@ export class DbStorage implements IStorage {
         and(
           eq(slots.phoneId, phoneId),
           gte(slots.usedAt, cutoffDate),
-          lt(slots.usedAt, startOfDay(new Date(now.getTime() + 24 * 60 * 60 * 1000))) // Less than tomorrow
+          lt(slots.usedAt, startOfTomorrow)
         )
       );
     
@@ -164,8 +173,11 @@ export class DbStorage implements IStorage {
   async getIpSlotUsage(ipId: string, referenceDate?: Date): Promise<number> {
     // Use provided reference date or current date for consistent calculation
     const now = referenceDate || new Date();
+    // Convert to Asia/Dhaka timezone
+    const zonedDate = toZonedTime(now, DEFAULT_TIMEZONE);
     // Calculate cutoff date at start of day to avoid timezone issues
-    const cutoffDate = startOfDay(subDays(now, SLOT_WINDOW_DAYS));
+    const cutoffDate = startOfDay(subDays(zonedDate, SLOT_WINDOW_DAYS));
+    const startOfTomorrow = startOfDay(new Date(zonedDate.getTime() + 24 * 60 * 60 * 1000));
     
     const result = await this.db
       .select({ total: sql<number>`COALESCE(SUM(${slots.count}), 0)` })
@@ -174,7 +186,7 @@ export class DbStorage implements IStorage {
         and(
           eq(slots.ipId, ipId),
           gte(slots.usedAt, cutoffDate),
-          lt(slots.usedAt, startOfDay(new Date(now.getTime() + 24 * 60 * 60 * 1000))) // Less than tomorrow
+          lt(slots.usedAt, startOfTomorrow)
         )
       );
     

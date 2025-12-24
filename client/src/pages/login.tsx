@@ -8,17 +8,12 @@ import { ServerCrash, Lock, User } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
 
-// Simple demo credentials (client-side validation only).
-// In a real app this should be validated server-side.
-const DEMO_USERNAME = "ashik";
-const DEMO_PASSWORD = "Dev11224411";
-
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const { login, isAuthenticated } = useStore();
 
-  const [username, setUsername] = useState(DEMO_USERNAME);
+  const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
 
   useEffect(() => {
@@ -28,10 +23,9 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, setLocation]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Basic client-side validation
     if (!username || !password) {
       toast.error("Please enter username and password");
       return;
@@ -39,17 +33,27 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    // Mock server-side credential check (replace with real API call as needed)
-    setTimeout(() => {
-      if (username === DEMO_USERNAME && password === DEMO_PASSWORD) {
-        login(); // Update store state
-        toast.success("Welcome back, Administrator");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        login();
+        toast.success("Welcome back, " + data.user.username);
         setLocation("/");
       } else {
-        toast.error("Invalid username or password");
+        toast.error(data.error || "Invalid credentials");
       }
+    } catch (error) {
+      toast.error("Login failed. Please try again.");
+    } finally {
       setIsLoading(false);
-    }, 700);
+    }
   };
 
   return (

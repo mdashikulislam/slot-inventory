@@ -9,6 +9,7 @@ import Dashboard from "@/pages/dashboard";
 import PhonesPage from "@/pages/phones";
 import IpsPage from "@/pages/ips";
 import LoginPage from "@/pages/login";
+import PasswordChangePage from "@/pages/change-password";
 import { useEffect } from "react";
 
 function ProtectedRoute({ component: Component, ...rest }: any) {
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/phones" component={() => <ProtectedRoute component={PhonesPage} />} />
       <Route path="/ips" component={() => <ProtectedRoute component={IpsPage} />} />
+      <Route path="/change-password" component={() => <ProtectedRoute component={PasswordChangePage} />} />
       <Route component={NotFound} />
     </Switch>
   );
