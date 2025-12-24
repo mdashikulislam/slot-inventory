@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import Layout from "@/components/layout";
 import { usePhones, useIps, useSlots, useCreateSlot, useDeleteSlot } from "@/hooks/use-data";
 import type { Phone, Ip } from "@shared/schema";
+import { SLOT_LIMIT, getSlotCutoffDate, calculateTotalUsage, isAtCapacity, getRemainingSlots, getUsagePercentage } from "@shared/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link2, Smartphone, Network, CheckCircle2, Search, X } from "lucide-react";
@@ -55,24 +56,26 @@ export default function Dashboard() {
   // Helper function to calculate slot usage within 15 days
   const getPhoneSlotUsage = (phoneId: string): number => {
     if (!slots) return 0;
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    const cutoffDate = getSlotCutoffDate();
     
-    return slots
-      .filter(slot => slot.phoneId === phoneId)
-      .filter(slot => new Date(slot.usedAt) >= fifteenDaysAgo)
-      .reduce((sum, slot) => sum + (slot.count || 1), 0);
+    const relevantSlots = slots.filter(slot => 
+      slot.phoneId === phoneId && 
+      new Date(slot.usedAt) >= cutoffDate
+    );
+    
+    return calculateTotalUsage(relevantSlots);
   };
 
   const getIpSlotUsage = (ipId: string): number => {
     if (!slots) return 0;
-    const fifteenDaysAgo = new Date();
-    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    const cutoffDate = getSlotCutoffDate();
     
-    return slots
-      .filter(slot => slot.ipId === ipId)
-      .filter(slot => new Date(slot.usedAt) >= fifteenDaysAgo)
-      .reduce((sum, slot) => sum + (slot.count || 1), 0);
+    const relevantSlots = slots.filter(slot => 
+      slot.ipId === ipId && 
+      new Date(slot.usedAt) >= cutoffDate
+    );
+    
+    return calculateTotalUsage(relevantSlots);
   };
 
   const handleCreateSlot = async () => {
@@ -133,7 +136,7 @@ export default function Dashboard() {
       .filter(p => {
         const usage = getPhoneSlotUsage(p.id);
         if (phoneSlotFilter === 'all') return true;
-        if (phoneSlotFilter === '4+') return usage >= 4;
+        if (phoneSlotFilter === '4+') return isAtCapacity(usage);
         return usage === parseInt(phoneSlotFilter, 10);
       })
       // Sort by usage ascending (most free first), then by phoneNumber
@@ -156,7 +159,7 @@ export default function Dashboard() {
       .filter(i => {
         if (ipSlotFilter === 'all') return true;
         const usage = getIpSlotUsage(i.id);
-        if (ipSlotFilter === '4+') return usage >= 4;
+        if (ipSlotFilter === '4+') return isAtCapacity(usage);
         return usage === parseInt(ipSlotFilter, 10);
       })
       // apply provider filter if any
@@ -209,8 +212,8 @@ export default function Dashboard() {
   // Metrics
   const totalPhones = phones?.length || 0;
   const totalIps = ips?.length || 0;
-  const availablePhones = phones?.filter(p => getPhoneSlotUsage(p.id) < 4).length || 0;
-  const availableIps = ips?.filter(i => getIpSlotUsage(i.id) < 4).length || 0;
+  const availablePhones = phones?.filter(p => !isAtCapacity(getPhoneSlotUsage(p.id))).length || 0;
+  const availableIps = ips?.filter(i => !isAtCapacity(getIpSlotUsage(i.id))).length || 0;
 
   // toggle single ip selection
   const toggleIpSelect = (id: string) => {
@@ -357,8 +360,9 @@ export default function Dashboard() {
                 <TableBody>
                   {filteredPhones.map(phone => {
                     const usage = getPhoneSlotUsage(phone.id);
-                    const isFull = usage >= 4;
-                    const percentage = Math.min((usage / 4) * 100, 100);
+                    const isFull = isAtCapacity(usage);
+                    const percentage = getUsagePercentage(usage);
+                    const remaining = getRemainingSlots(usage);
 
                     return (
                       <TableRow 
@@ -375,9 +379,9 @@ export default function Dashboard() {
                         </TableCell>
                         <TableCell className="pl-6 font-medium">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              usage >= 4 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              isFull ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                           }`} data-testid={`badge-usage-${phone.id}`}>
-                          {4 - usage}
+                          {remaining}
                         </span>
                         </TableCell>
                         <TableCell className="text-right pr-6">
@@ -386,7 +390,7 @@ export default function Dashboard() {
                                 <span
                                     className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"}
                                     data-testid={`text-phone-usage-${phone.id}`}>
-                                  {usage} <span className="text-destructive font-normal">/ 4</span>
+                                  {usage} <span className="text-destructive font-normal">/ {SLOT_LIMIT}</span>
                                 </span>
                              </div>
 
@@ -488,8 +492,9 @@ export default function Dashboard() {
                   <TableBody>
                     {filteredIps.map(ip => {
                       const usage = getIpSlotUsage(ip.id);
-                      const isFull = usage >= 4;
-                      const percentage = Math.min((usage / 4) * 100, 100);
+                      const isFull = isAtCapacity(usage);
+                      const percentage = getUsagePercentage(usage);
+                      const remaining = getRemainingSlots(usage);
 
                       return (
                         <TableRow key={ip.id} className="hover:bg-muted/40 cursor-pointer transition-colors h-14 border-b border-border/40 group" data-testid={`row-ip-${ip.id}`}>
@@ -504,12 +509,12 @@ export default function Dashboard() {
                           </TableCell>
                           <TableCell className="align-middle" onClick={() => setDetailIp(ip)}>{ip.provider || '-'}</TableCell>
                           <TableCell className="pl-6 align-middle cursor-pointer" onClick={() => setDetailIp(ip)}>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isFull ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`} data-testid={`badge-usage-${ip.id}`}>{4 - usage}</span>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isFull ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`} data-testid={`badge-usage-${ip.id}`}>{remaining}</span>
                           </TableCell>
                           <TableCell className="text-right pr-6 align-middle">
                             <div className="flex flex-col items-end gap-1.5">
                               <div className="flex items-center gap-2 text-xs">
-                                <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-ip-usage-${ip.id}`}>{usage} <span className="text-destructive font-normal">/ 4</span></span>
+                                <span className={isFull ? "text-destructive font-bold" : "text-muted-foreground font-medium"} data-testid={`text-ip-usage-${ip.id}`}>{usage} <span className="text-destructive font-normal">/ {SLOT_LIMIT}</span></span>
                               </div>
                               <Progress value={percentage} className={`h-1.5 w-24 ${isFull ? '[&>div]:bg-destructive' : '[&>div]:bg-indigo-500'}`} />
                             </div>
@@ -535,8 +540,9 @@ export default function Dashboard() {
               <div className="md:hidden p-3 space-y-3">
                 {filteredIps.map(ip => {
                   const usage = getIpSlotUsage(ip.id);
-                  const isFull = usage >= 4;
-                  const percentage = Math.min((usage / 4) * 100, 100);
+                  const isFull = isAtCapacity(usage);
+                  const percentage = getUsagePercentage(usage);
+                  const remaining = getRemainingSlots(usage);
                   return (
                     <div key={ip.id} className="flex items-start justify-between gap-3 p-3 bg-card/60 border border-border rounded-lg" data-testid={`mobile-row-ip-${ip.id}`}>
                       <div className="flex items-start gap-3">
@@ -551,7 +557,7 @@ export default function Dashboard() {
                           {ip.remark && <div className="text-xs text-muted-foreground truncate max-w-[200px]">{ip.remark}</div>}
                           <div className="mt-2 flex items-center gap-3">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${isFull ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{usage}</span>
-                            <span className="text-xs text-muted-foreground">{4 - usage} / 4</span>
+                            <span className="text-xs text-muted-foreground">{remaining} / {SLOT_LIMIT}</span>
                           </div>
                         </div>
                       </div>
@@ -580,7 +586,7 @@ export default function Dashboard() {
           <DialogHeader>
             <DialogTitle>Create Allocation</DialogTitle>
             <DialogDescription>
-              Allocate slots for a single Phone or IP. STRICT LIMIT enforced (Max 4 slots / 15 days).
+              Allocate slots for a single Phone or IP. STRICT LIMIT enforced (Max {SLOT_LIMIT} slots / 15 days).
             </DialogDescription>
           </DialogHeader>
 
@@ -664,7 +670,7 @@ export default function Dashboard() {
                       <div className="max-h-[420px] overflow-y-auto py-1">{/* increased height for search overflow */}
                         {selectablePhones.map(phone => {
                           const usage = getPhoneSlotUsage(phone.id);
-                          const disabled = usage >= 4;
+                          const disabled = isAtCapacity(usage);
                           return (
                             <SelectItem key={phone.id} value={phone.id} disabled={disabled}>
                               <div className="flex justify-between items-center w-full min-w-[200px]">
@@ -673,7 +679,7 @@ export default function Dashboard() {
                                   {phone.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{phone.remark}</span>}
                                 </div>
                                 <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                                  ({usage}/4 used)
+                                  ({usage}/{SLOT_LIMIT} used)
                                 </span>
                               </div>
                             </SelectItem>
@@ -704,7 +710,7 @@ export default function Dashboard() {
                       <div className="max-h-[420px] overflow-y-auto py-1">{/* increased height for search overflow */}
                         {selectableIps.map(ip => {
                           const usage = getIpSlotUsage(ip.id);
-                          const disabled = usage >= 4;
+                          const disabled = isAtCapacity(usage);
                           return (
                             <SelectItem key={ip.id} value={ip.id} disabled={disabled}>
                               <div className="flex justify-between items-center w-full min-w-[200px]">
@@ -713,7 +719,7 @@ export default function Dashboard() {
                                   {ip.remark && <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{ip.remark}</span>}
                                 </div>
                                 <span className={`text-xs ml-2 ${disabled ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
-                                  ({usage}/4 used)
+                                  ({usage}/{SLOT_LIMIT} used)
                                 </span>
                               </div>
                             </SelectItem>

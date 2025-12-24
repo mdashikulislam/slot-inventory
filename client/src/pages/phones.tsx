@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertPhoneSchema } from "@shared/schema";
 import type { InsertPhone, Phone } from "@shared/schema";
+import { SLOT_LIMIT, getSlotCutoffDate, calculateTotalUsage, isAtCapacity } from "@shared/utils";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,12 +85,14 @@ export default function PhonesPage() {
   };
 
   const getPhoneSlotUsage = (phoneId: string) => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 15);
+    const cutoffDate = getSlotCutoffDate();
     
-    return slots
-      .filter(s => s.phoneId === phoneId && new Date(s.usedAt) > cutoff)
-      .reduce((acc, curr) => acc + (curr.count || 1), 0);
+    const relevantSlots = slots.filter(s => 
+      s.phoneId === phoneId && 
+      new Date(s.usedAt) >= cutoffDate
+    );
+    
+    return calculateTotalUsage(relevantSlots);
   };
 
   if (isLoading) {
@@ -145,9 +148,9 @@ export default function PhonesPage() {
                       <TableCell data-testid={`text-email-${phone.id}`}>{phone.email || "-"}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          usage >= 4 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          isAtCapacity(usage) ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                         }`} data-testid={`badge-usage-${phone.id}`}>
-                          {usage} / 4
+                          {usage} / {SLOT_LIMIT}
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground" data-testid={`text-remark-${phone.id}`}>{phone.remark || "-"}</TableCell>

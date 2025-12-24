@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertIpSchema } from "@shared/schema";
 import type { InsertIp, Ip } from "@shared/schema";
+import { SLOT_LIMIT, getSlotCutoffDate, calculateTotalUsage, isAtCapacity } from "@shared/utils";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,12 +96,14 @@ export default function IpsPage() {
   };
 
   const getIpSlotUsage = (ipId: string) => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 15);
+    const cutoffDate = getSlotCutoffDate();
     
-    return slots
-      .filter(s => s.ipId === ipId && new Date(s.usedAt) > cutoff)
-      .reduce((acc, curr) => acc + (curr.count || 1), 0);
+    const relevantSlots = slots.filter(s => 
+      s.ipId === ipId && 
+      new Date(s.usedAt) >= cutoffDate
+    );
+    
+    return calculateTotalUsage(relevantSlots);
   };
 
   const filteredIps = useMemo(() => {
@@ -111,7 +114,7 @@ export default function IpsPage() {
         ip.remark?.toLowerCase().includes(searchQuery.toLowerCase());
       
       const usage = getIpSlotUsage(ip.id);
-      const matchesFilter = filterType === "all" || (filterType === "available" && usage < 4);
+      const matchesFilter = filterType === "all" || (filterType === "available" && !isAtCapacity(usage));
 
       return matchesSearch && matchesFilter;
     });
@@ -222,7 +225,7 @@ export default function IpsPage() {
               ) : (
                 filteredIps.map((ip) => {
                   const usage = getIpSlotUsage(ip.id);
-                  const isFull = usage >= 4;
+                  const isFull = isAtCapacity(usage);
                   return (
                     <TableRow key={ip.id} className={isFull ? "bg-muted/10" : ""} data-testid={`row-ip-${ip.id}`}>
                       <TableCell className="font-medium font-mono text-xs md:text-sm" data-testid={`text-ip-${ip.id}`}>
@@ -237,7 +240,7 @@ export default function IpsPage() {
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           isFull ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                         }`} data-testid={`badge-usage-${ip.id}`}>
-                          {usage} / 4
+                          {usage} / {SLOT_LIMIT}
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate text-muted-foreground" data-testid={`text-remark-${ip.id}`}>{ip.remark || "-"}</TableCell>
