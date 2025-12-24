@@ -58,15 +58,27 @@ export type Ip = typeof ips.$inferSelect;
 
 export const slots = pgTable("slots", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  phoneId: varchar("phone_id").notNull().references(() => phones.id, { onDelete: "cascade" }),
-  ipId: varchar("ip_id").notNull().references(() => ips.id, { onDelete: "cascade" }),
+  // phoneId and ipId are nullable now because allocations are independent (either can be used)
+  phoneId: varchar("phone_id").references(() => phones.id, { onDelete: "cascade" }),
+  ipId: varchar("ip_id").references(() => ips.id, { onDelete: "cascade" }),
   count: integer("count").notNull().default(1),
   usedAt: timestamp("used_at").notNull(),
 });
 
-export const insertSlotSchema = createInsertSchema(slots).omit({
-  id: true,
-});
+export const insertSlotSchema = createInsertSchema(slots)
+  .omit({ id: true })
+  .extend({
+    // allow either phoneId or ipId to be provided
+    phoneId: z.string().optional(),
+    ipId: z.string().optional(),
+    count: z.number().optional(),
+    usedAt: z.coerce.date(),
+  })
+  .superRefine((val, ctx) => {
+    if (!val.phoneId && !val.ipId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Either phoneId or ipId is required" });
+    }
+  });
 
 export type InsertSlot = z.infer<typeof insertSlotSchema>;
 export type Slot = typeof slots.$inferSelect;
