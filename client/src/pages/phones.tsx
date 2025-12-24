@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Plus, Pencil, Trash2, Search, X, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, Plus, Pencil, Trash2, Search, X, Copy, Check, ChevronLeft, ChevronRight, ArrowUpDown, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertPhoneSchema } from "@shared/schema";
@@ -31,6 +31,9 @@ export default function PhonesPage() {
   const [slotFilter, setSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [sortField, setSortField] = useState<'phoneNumber' | 'usage'>('usage');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const ITEMS_PER_PAGE = 10;
 
   const form = useForm<InsertPhone>({
@@ -113,6 +116,57 @@ export default function PhonesPage() {
     }
   };
 
+  // Toggle individual checkbox
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Toggle all checkboxes
+  const toggleSelectAll = (checked: boolean) => {
+    const newSelected: Record<string, boolean> = {};
+    if (checked) {
+      paginatedPhones.forEach(phone => {
+        newSelected[phone.id] = true;
+      });
+    }
+    setSelectedIds(newSelected);
+  };
+
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    const selectedCount = Object.values(selectedIds).filter(Boolean).length;
+    if (selectedCount === 0) {
+      toast.error("No phones selected");
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedCount} phone(s)? All associated slots will be removed.`)) {
+      return;
+    }
+
+    try {
+      const deletePromises = Object.keys(selectedIds)
+        .filter(id => selectedIds[id])
+        .map(id => deletePhone.mutateAsync(id));
+      
+      await Promise.all(deletePromises);
+      toast.success(`Deleted ${selectedCount} phone(s)`);
+      setSelectedIds({});
+    } catch (error: any) {
+      toast.error("Failed to delete some phones");
+    }
+  };
+
+  // Sort toggle
+  const toggleSort = (field: 'phoneNumber' | 'usage') => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
   // Filtered and paginated phones
   const filteredPhones = useMemo(() => {
     if (!phones) return [];
@@ -129,12 +183,17 @@ export default function PhonesPage() {
         return usage === parseInt(slotFilter, 10);
       })
       .sort((a, b) => {
-        const ua = getPhoneSlotUsage(a.id);
-        const ub = getPhoneSlotUsage(b.id);
-        if (ua !== ub) return ua - ub;
-        return a.phoneNumber.localeCompare(b.phoneNumber);
+        if (sortField === 'phoneNumber') {
+          const comparison = a.phoneNumber.localeCompare(b.phoneNumber);
+          return sortDirection === 'asc' ? comparison : -comparison;
+        } else {
+          const ua = getPhoneSlotUsage(a.id);
+          const ub = getPhoneSlotUsage(b.id);
+          const comparison = ua - ub;
+          return sortDirection === 'asc' ? comparison : -comparison;
+        }
       });
-  }, [phones, searchQuery, slotFilter, slots]);
+  }, [phones, searchQuery, slotFilter, slots, sortField, sortDirection]);
 
   // Pagination
   const totalPages = Math.ceil(filteredPhones.length / ITEMS_PER_PAGE);
@@ -165,9 +224,21 @@ export default function PhonesPage() {
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent" data-testid="heading-phones">Phones Management</h1>
           <p className="text-muted-foreground mt-1">Add, edit, and manage phone numbers in the system.</p>
         </div>
-        <Button onClick={openAddDialog} className="bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer" data-testid="button-add-phone">
-          <Plus className="mr-2 h-4 w-4" /> Add Phone
-        </Button>
+        <div className="flex gap-2">
+          {Object.values(selectedIds).some(Boolean) && (
+            <Button 
+              onClick={handleBulkDelete} 
+              variant="destructive" 
+              className="cursor-pointer"
+            >
+              <Trash className="mr-2 h-4 w-4" /> 
+              Delete Selected ({Object.values(selectedIds).filter(Boolean).length})
+            </Button>
+          )}
+          <Button onClick={openAddDialog} className="bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer" data-testid="button-add-phone">
+            <Plus className="mr-2 h-4 w-4" /> Add Phone
+          </Button>
+        </div>
       </div>
 
       <Card className="shadow-lg border border-slate-200 dark:border-slate-800">
@@ -204,7 +275,7 @@ export default function PhonesPage() {
                   <SelectItem value="1">1 Used</SelectItem>
                   <SelectItem value="2">2 Used</SelectItem>
                   <SelectItem value="3">3 Used</SelectItem>
-                  <SelectItem value="4">4+ Used</SelectItem>
+                  <SelectItem value="4">4 Used</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -214,9 +285,28 @@ export default function PhonesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Phone Number</TableHead>
+                <TableHead className="w-12">
+                  <input
+                    type="checkbox"
+                    className="cursor-pointer"
+                    checked={paginatedPhones.length > 0 && paginatedPhones.every(p => selectedIds[p.id])}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                    aria-label="Select all"
+                  />
+                </TableHead>
+                <TableHead className="cursor-pointer" onClick={() => toggleSort('phoneNumber')}>
+                  <div className="flex items-center gap-2">
+                    Phone Number
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                </TableHead>
                 <TableHead>Email</TableHead>
-                <TableHead>Slots Used (15d)</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => toggleSort('usage')}>
+                  <div className="flex items-center gap-2">
+                    Slots Used (15d)
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                </TableHead>
                 <TableHead>Remark</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
@@ -224,7 +314,7 @@ export default function PhonesPage() {
             <TableBody>
               {paginatedPhones.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     {searchQuery || slotFilter !== 'all' ? 'No phones match your filters.' : 'No phones found. Click "Add Phone" to create one.'}
                   </TableCell>
                 </TableRow>
@@ -234,6 +324,16 @@ export default function PhonesPage() {
                    const remaining = getRemainingSlots(usage);
                    return (
                     <TableRow key={phone.id} className="group" data-testid={`row-phone-${phone.id}`}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          className="cursor-pointer"
+                          checked={!!selectedIds[phone.id]}
+                          onChange={() => toggleSelect(phone.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${phone.phoneNumber}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <span className="font-mono" data-testid={`text-phone-number-${phone.id}`}>{phone.phoneNumber}</span>

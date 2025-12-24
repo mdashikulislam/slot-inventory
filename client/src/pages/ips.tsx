@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Plus, Pencil, Trash2, Download, Search, CheckCircle, XCircle, X, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreHorizontal, Plus, Pencil, Trash2, Download, Search, CheckCircle, XCircle, X, Copy, Check, ChevronLeft, ChevronRight, ArrowUpDown, Trash } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertIpSchema } from "@shared/schema";
@@ -28,11 +28,13 @@ export default function IpsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "available">("all");
   const [slotFilter, setSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4">("all");
   const [providerFilter, setProviderFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [sortField, setSortField] = useState<'ipAddress' | 'usage'>('usage');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const ITEMS_PER_PAGE = 10;
 
   const form = useForm<InsertIp>({
@@ -124,6 +126,57 @@ export default function IpsPage() {
     }
   };
 
+  // Toggle individual checkbox
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Toggle all checkboxes
+  const toggleSelectAll = (checked: boolean) => {
+    const newSelected: Record<string, boolean> = {};
+    if (checked) {
+      paginatedIps.forEach(ip => {
+        newSelected[ip.id] = true;
+      });
+    }
+    setSelectedIds(newSelected);
+  };
+
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    const selectedCount = Object.values(selectedIds).filter(Boolean).length;
+    if (selectedCount === 0) {
+      toast.error("No IPs selected");
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedCount} IP(s)? All associated slots will be removed.`)) {
+      return;
+    }
+
+    try {
+      const deletePromises = Object.keys(selectedIds)
+        .filter(id => selectedIds[id])
+        .map(id => deleteIp.mutateAsync(id));
+      
+      await Promise.all(deletePromises);
+      toast.success(`Deleted ${selectedCount} IP(s)`);
+      setSelectedIds({});
+    } catch (error: any) {
+      toast.error("Failed to delete some IPs");
+    }
+  };
+
+  // Sort toggle
+  const toggleSort = (field: 'ipAddress' | 'usage') => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
   // Get unique providers
   const uniqueProviders = useMemo(() => {
     const providers = new Set<string>();
@@ -141,21 +194,25 @@ export default function IpsPage() {
         ip.remark?.toLowerCase().includes(searchQuery.toLowerCase());
       
       const usage = getIpSlotUsage(ip.id);
-      const matchesFilter = filterType === "all" || (filterType === "available" && !isAtCapacity(usage));
       
       const matchesSlot = slotFilter === 'all' || 
         (slotFilter === '4' ? usage >= 4 : usage === parseInt(slotFilter, 10));
       
       const matchesProvider = providerFilter === 'all' || ip.provider === providerFilter;
 
-      return matchesSearch && matchesFilter && matchesSlot && matchesProvider;
+      return matchesSearch && matchesSlot && matchesProvider;
     }).sort((a, b) => {
-      const ua = getIpSlotUsage(a.id);
-      const ub = getIpSlotUsage(b.id);
-      if (ua !== ub) return ua - ub;
-      return a.ipAddress.localeCompare(b.ipAddress);
+      if (sortField === 'ipAddress') {
+        const comparison = a.ipAddress.localeCompare(b.ipAddress);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      } else {
+        const ua = getIpSlotUsage(a.id);
+        const ub = getIpSlotUsage(b.id);
+        const comparison = ua - ub;
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
     });
-  }, [ips, searchQuery, filterType, slotFilter, providerFilter, slots]);
+  }, [ips, searchQuery, slotFilter, providerFilter, slots, sortField, sortDirection]);
 
   // Pagination
   const totalPages = Math.ceil(filteredIps.length / ITEMS_PER_PAGE);
@@ -167,7 +224,7 @@ export default function IpsPage() {
   // Reset to page 1 when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterType, slotFilter, providerFilter]);
+  }, [searchQuery, slotFilter, providerFilter]);
 
   const handleExport = () => {
     const lines = filteredIps.map(ip => {
@@ -186,7 +243,7 @@ export default function IpsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `ips_export_${filterType}_${new Date().toISOString().split('T')[0]}.txt`);
+    link.setAttribute("download", `ips_export_${new Date().toISOString().split('T')[0]}.txt`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -212,6 +269,16 @@ export default function IpsPage() {
           <p className="text-muted-foreground mt-1">Manage proxies and IP addresses.</p>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
+          {Object.values(selectedIds).some(Boolean) && (
+            <Button 
+              onClick={handleBulkDelete} 
+              variant="destructive" 
+              className="cursor-pointer"
+            >
+              <Trash className="mr-2 h-4 w-4" /> 
+              Delete Selected ({Object.values(selectedIds).filter(Boolean).length})
+            </Button>
+          )}
           <Button onClick={openAddDialog} className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-md hover:shadow-lg transition-all cursor-pointer" data-testid="button-add-ip">
             <Plus className="mr-2 h-4 w-4" /> Add IP
           </Button>
@@ -259,7 +326,7 @@ export default function IpsPage() {
                   <SelectItem value="1">1 Used</SelectItem>
                   <SelectItem value="2">2 Used</SelectItem>
                   <SelectItem value="3">3 Used</SelectItem>
-                  <SelectItem value="4">4+ Used</SelectItem>
+                  <SelectItem value="4">4 Used</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={providerFilter} onValueChange={setProviderFilter}>
@@ -271,14 +338,6 @@ export default function IpsPage() {
                   {uniqueProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <ToggleGroup type="single" value={filterType} onValueChange={(v) => v && setFilterType(v as any)} className="justify-start">
-                <ToggleGroupItem value="all" aria-label="All IPs" data-testid="toggle-all" className="cursor-pointer">
-                  All
-                </ToggleGroupItem>
-                <ToggleGroupItem value="available" aria-label="Available IPs" data-testid="toggle-available" className="cursor-pointer">
-                  Available
-                </ToggleGroupItem>
-              </ToggleGroup>
             </div>
           </div>
         </CardHeader>
@@ -286,10 +345,29 @@ export default function IpsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>IP Address</TableHead>
+                <TableHead className="w-12">
+                  <input
+                    type="checkbox"
+                    className="cursor-pointer"
+                    checked={paginatedIps.length > 0 && paginatedIps.every(ip => selectedIds[ip.id])}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                    aria-label="Select all"
+                  />
+                </TableHead>
+                <TableHead className="cursor-pointer" onClick={() => toggleSort('ipAddress')}>
+                  <div className="flex items-center gap-2">
+                    IP Address
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                </TableHead>
                 <TableHead>Port</TableHead>
                 <TableHead>Provider</TableHead>
-                <TableHead>Slots Used (15d)</TableHead>
+                <TableHead className="cursor-pointer" onClick={() => toggleSort('usage')}>
+                  <div className="flex items-center gap-2">
+                    Slots Used (15d)
+                    <ArrowUpDown className="h-4 w-4" />
+                  </div>
+                </TableHead>
                 <TableHead>Remark</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
@@ -297,7 +375,7 @@ export default function IpsPage() {
             <TableBody>
               {paginatedIps.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Search className="h-8 w-8 opacity-20" />
                       <p>{searchQuery || slotFilter !== 'all' || providerFilter !== 'all' ? 'No IPs match your filters.' : 'No IPs found. Click "Add IP" to create one.'}</p>
@@ -310,6 +388,16 @@ export default function IpsPage() {
                   const remaining = getRemainingSlots(usage);
                   return (
                     <TableRow key={ip.id} className="group" data-testid={`row-ip-${ip.id}`}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          className="cursor-pointer"
+                          checked={!!selectedIds[ip.id]}
+                          onChange={() => toggleSelect(ip.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${ip.ipAddress}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs md:text-sm" data-testid={`text-ip-${ip.id}`}>{ip.ipAddress}</span>
