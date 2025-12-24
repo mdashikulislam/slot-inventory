@@ -1,7 +1,9 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { eq, and, gte, desc, sql } from "drizzle-orm";
-import { subDays } from "date-fns";
+import { eq, and, gte, desc, sql, lt } from "drizzle-orm";
+import { subDays, startOfDay } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { SLOT_LIMIT, SLOT_WINDOW_DAYS, DEFAULT_TIMEZONE } from "@shared/utils";
 import { 
   type User, 
   type InsertUser,
@@ -22,6 +24,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserPassword(id: string, hashedPassword: string): Promise<void>;
 
   // Phone operations
   getPhones(): Promise<Phone[]>;
@@ -42,8 +45,9 @@ export interface IStorage {
   getSlot(id: string): Promise<Slot | undefined>;
   createSlot(slot: InsertSlot): Promise<Slot>;
   deleteSlot(id: string): Promise<void>;
-  getPhoneSlotUsage(phoneId: string): Promise<number>;
-  getIpSlotUsage(ipId: string): Promise<number>;
+  getPhoneSlotUsage(phoneId: string, referenceDate?: Date): Promise<number>;
+  getIpSlotUsage(ipId: string, referenceDate?: Date): Promise<number>;
+  validateSlotAllocation(phoneId: string | undefined, ipId: string | undefined, count: number, referenceDate?: Date): Promise<{ valid: boolean; message?: string; currentUsage?: number }>;
 }
 
 export class DbStorage implements IStorage {
@@ -70,6 +74,10 @@ export class DbStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const result = await this.db.insert(users).values(insertUser).returning();
     return result[0];
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<void> {
+    await this.db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
   }
 
   // Phone operations
@@ -139,8 +147,14 @@ export class DbStorage implements IStorage {
     await this.db.delete(slots).where(eq(slots.id, id));
   }
 
-  async getPhoneSlotUsage(phoneId: string): Promise<number> {
-    const cutoffDate = subDays(new Date(), 15);
+  async getPhoneSlotUsage(phoneId: string, referenceDate?: Date): Promise<number> {
+    // Use provided reference date or current date for consistent calculation
+    const now = referenceDate || new Date();
+    // Convert to Asia/Dhaka timezone
+    const zonedDate = toZonedTime(now, DEFAULT_TIMEZONE);
+    // Calculate cutoff date at start of day to avoid timezone issues
+    const cutoffDate = startOfDay(subDays(zonedDate, SLOT_WINDOW_DAYS));
+    const startOfTomorrow = startOfDay(new Date(zonedDate.getTime() + 24 * 60 * 60 * 1000));
     
     const result = await this.db
       .select({ total: sql<number>`COALESCE(SUM(${slots.count}), 0)` })
@@ -148,15 +162,22 @@ export class DbStorage implements IStorage {
       .where(
         and(
           eq(slots.phoneId, phoneId),
-          gte(slots.usedAt, cutoffDate)
+          gte(slots.usedAt, cutoffDate),
+          lt(slots.usedAt, startOfTomorrow)
         )
       );
     
     return Number(result[0]?.total || 0);
   }
 
-  async getIpSlotUsage(ipId: string): Promise<number> {
-    const cutoffDate = subDays(new Date(), 15);
+  async getIpSlotUsage(ipId: string, referenceDate?: Date): Promise<number> {
+    // Use provided reference date or current date for consistent calculation
+    const now = referenceDate || new Date();
+    // Convert to Asia/Dhaka timezone
+    const zonedDate = toZonedTime(now, DEFAULT_TIMEZONE);
+    // Calculate cutoff date at start of day to avoid timezone issues
+    const cutoffDate = startOfDay(subDays(zonedDate, SLOT_WINDOW_DAYS));
+    const startOfTomorrow = startOfDay(new Date(zonedDate.getTime() + 24 * 60 * 60 * 1000));
     
     const result = await this.db
       .select({ total: sql<number>`COALESCE(SUM(${slots.count}), 0)` })
@@ -164,11 +185,60 @@ export class DbStorage implements IStorage {
       .where(
         and(
           eq(slots.ipId, ipId),
-          gte(slots.usedAt, cutoffDate)
+          gte(slots.usedAt, cutoffDate),
+          lt(slots.usedAt, startOfTomorrow)
         )
       );
     
     return Number(result[0]?.total || 0);
+  }
+
+  async validateSlotAllocation(
+    phoneId: string | undefined, 
+    ipId: string | undefined, 
+    count: number,
+    referenceDate?: Date
+  ): Promise<{ valid: boolean; message?: string; currentUsage?: number }> {
+    // Validate count
+    if (count < 1 || count > SLOT_LIMIT) {
+      return { valid: false, message: `Count must be between 1 and ${SLOT_LIMIT}` };
+    }
+
+    // Validate phone allocation
+    if (phoneId) {
+      const phoneExists = await this.getPhone(phoneId);
+      if (!phoneExists) {
+        return { valid: false, message: 'Phone not found' };
+      }
+
+      const currentUsage = await this.getPhoneSlotUsage(phoneId, referenceDate);
+      if (currentUsage + count > SLOT_LIMIT) {
+        return {
+          valid: false,
+          message: `Allocation blocked. Phone would exceed limit (Current: ${currentUsage}, Adding: ${count}, Limit: ${SLOT_LIMIT})`,
+          currentUsage
+        };
+      }
+    }
+
+    // Validate IP allocation
+    if (ipId) {
+      const ipExists = await this.getIp(ipId);
+      if (!ipExists) {
+        return { valid: false, message: 'IP not found' };
+      }
+
+      const currentUsage = await this.getIpSlotUsage(ipId, referenceDate);
+      if (currentUsage + count > SLOT_LIMIT) {
+        return {
+          valid: false,
+          message: `Allocation blocked. IP would exceed limit (Current: ${currentUsage}, Adding: ${count}, Limit: ${SLOT_LIMIT})`,
+          currentUsage
+        };
+      }
+    }
+
+    return { valid: true };
   }
 }
 

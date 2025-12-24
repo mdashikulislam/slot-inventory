@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -62,21 +62,30 @@ export const slots = pgTable("slots", {
   phoneId: varchar("phone_id").references(() => phones.id, { onDelete: "cascade" }),
   ipId: varchar("ip_id").references(() => ips.id, { onDelete: "cascade" }),
   count: integer("count").notNull().default(1),
-  usedAt: timestamp("used_at").notNull(),
-});
+  usedAt: timestamp("used_at", { mode: 'date' }).notNull(),
+}, (table) => ({
+  phoneIdIdx: index("slots_phone_id_idx").on(table.phoneId),
+  ipIdIdx: index("slots_ip_id_idx").on(table.ipId),
+  usedAtIdx: index("slots_used_at_idx").on(table.usedAt),
+  phoneIdUsedAtIdx: index("slots_phone_id_used_at_idx").on(table.phoneId, table.usedAt),
+  ipIdUsedAtIdx: index("slots_ip_id_used_at_idx").on(table.ipId, table.usedAt),
+}));
 
 export const insertSlotSchema = createInsertSchema(slots)
   .omit({ id: true })
   .extend({
     // allow either phoneId or ipId to be provided
-    phoneId: z.string().optional(),
-    ipId: z.string().optional(),
-    count: z.number().optional(),
+    phoneId: z.string().uuid("Invalid phone ID format").optional(),
+    ipId: z.string().uuid("Invalid IP ID format").optional(),
+    count: z.number().int("Count must be an integer").min(1, "Count must be at least 1").max(4, "Count cannot exceed 4").optional(),
     usedAt: z.coerce.date(),
   })
   .superRefine((val, ctx) => {
     if (!val.phoneId && !val.ipId) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Either phoneId or ipId is required" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Either phoneId or ipId is required", path: ['phoneId'] });
+    }
+    if (val.phoneId && val.ipId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Cannot allocate both phone and IP in a single slot", path: ['phoneId'] });
     }
   });
 

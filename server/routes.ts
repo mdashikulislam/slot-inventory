@@ -3,6 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import { insertPhoneSchema, insertIpSchema, insertSlotSchema } from "@shared/schema";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -186,34 +187,34 @@ export async function registerRoutes(
   app.post("/api/slots", async (req, res) => {
     try {
       const body = { ...req.body };
-      // Normalize usedAt
+      
+      // Normalize usedAt to Date object
       if (typeof body.usedAt === "string") {
         body.usedAt = new Date(body.usedAt);
       }
+      
       // Normalize ids: treat empty string as undefined
-      if (typeof body.phoneId === 'string' && body.phoneId.trim() === '') delete body.phoneId;
-      if (typeof body.ipId === 'string' && body.ipId.trim() === '') delete body.ipId;
+      if (typeof body.phoneId === 'string' && body.phoneId.trim() === '') {
+        delete body.phoneId;
+      }
+      if (typeof body.ipId === 'string' && body.ipId.trim() === '') {
+        delete body.ipId;
+      }
+      
+      // Validate schema first
       const data = insertSlotSchema.parse(body);
       const count = data.count ?? 1;
       
-      // Check phone usage only if phoneId provided
-      if (data.phoneId && typeof data.phoneId === 'string') {
-        const phoneUsage = await storage.getPhoneSlotUsage(data.phoneId);
-        if (phoneUsage + count > 4) {
-          return res.status(400).json({ 
-            error: `Allocation blocked. Phone would exceed limit (Current: ${phoneUsage}, Adding: ${count}, Limit: 4)` 
-          });
-        }
-      }
+      // Use centralized validation logic
+      const validation = await storage.validateSlotAllocation(
+        data.phoneId, 
+        data.ipId, 
+        count,
+        data.usedAt
+      );
 
-      // Check IP usage only if ipId provided
-      if (data.ipId && typeof data.ipId === 'string') {
-        const ipUsage = await storage.getIpSlotUsage(data.ipId);
-        if (ipUsage + count > 4) {
-          return res.status(400).json({ 
-            error: `Allocation blocked. IP would exceed limit (Current: ${ipUsage}, Adding: ${count}, Limit: 4)` 
-          });
-        }
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.message });
       }
 
       const slot = await storage.createSlot(data);
@@ -230,6 +231,69 @@ export async function registerRoutes(
     try {
       await storage.deleteSlot(req.params.id);
       res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ===== Authentication Routes =====
+  
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password required" });
+      }
+
+      const user = await storage.getUserByUsername(username);
+      
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      const isValid = await bcrypt.compare(password, user.password);
+      
+      if (!isValid) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      res.json({ user: userWithoutPassword, message: "Login successful" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/auth/change-password", async (req, res) => {
+    try {
+      const { username, currentPassword, newPassword } = req.body;
+      
+      if (!username || !currentPassword || !newPassword) {
+        return res.status(400).json({ error: "All fields are required" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "New password must be at least 6 characters" });
+      }
+
+      const user = await storage.getUserByUsername(username);
+      
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const isValid = await bcrypt.compare(currentPassword, user.password);
+      
+      if (!isValid) {
+        return res.status(401).json({ error: "Current password is incorrect" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUserPassword(user.id, hashedPassword);
+
+      res.json({ message: "Password changed successfully" });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
