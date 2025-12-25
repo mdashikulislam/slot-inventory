@@ -5,7 +5,7 @@ import type { Phone, Ip } from "@shared/schema";
 import { SLOT_LIMIT, getSlotCutoffDate, calculateTotalUsage, isAtCapacity, getRemainingSlots, getUsagePercentage } from "@shared/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Link2, Smartphone, Network, CheckCircle2, Search, X, Download, Copy, Check } from "lucide-react";
+import { Link2, Smartphone, Network, CheckCircle2, Search, X, Download, Copy, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -53,6 +53,11 @@ export default function Dashboard() {
   // Selection state for exporting specific IPs (checkboxes)
   const [selectedIpIds, setSelectedIpIds] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Pagination state
+  const [phonePage, setPhonePage] = useState(1);
+  const [ipPage, setIpPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   // Copy to clipboard function
   const copyToClipboard = async (text: string, id: string) => {
@@ -161,6 +166,13 @@ export default function Dashboard() {
       });
   }, [phones, searchQuery, slots, phoneSlotFilter]);
 
+  // Paginated phones
+  const totalPhonePages = Math.ceil(filteredPhones.length / ITEMS_PER_PAGE);
+  const paginatedPhones = useMemo(() => {
+    const startIdx = (phonePage - 1) * ITEMS_PER_PAGE;
+    return filteredPhones.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [filteredPhones, phonePage]);
+
   const filteredIps = useMemo(() => {
     if (!ips) return [];
     return ips
@@ -188,6 +200,22 @@ export default function Dashboard() {
         return a.ipAddress.localeCompare(b.ipAddress);
       });
   }, [ips, searchQuery, slots, ipSlotFilter, ipProviderFilter]);
+
+  // Paginated IPs
+  const totalIpPages = Math.ceil(filteredIps.length / ITEMS_PER_PAGE);
+  const paginatedIps = useMemo(() => {
+    const startIdx = (ipPage - 1) * ITEMS_PER_PAGE;
+    return filteredIps.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [filteredIps, ipPage]);
+
+  // Reset pages when filters change
+  useMemo(() => {
+    setPhonePage(1);
+  }, [searchQuery, phoneSlotFilter]);
+
+  useMemo(() => {
+    setIpPage(1);
+  }, [searchQuery, ipSlotFilter, ipProviderFilter]);
 
   // unique providers for IPs (used in provider dropdown)
   const uniqueProviders = useMemo<string[]>(() => {
@@ -236,7 +264,7 @@ export default function Dashboard() {
   // select/unselect all visible ips
   const toggleSelectAllVisible = (checked: boolean) => {
     const newMap: Record<string, boolean> = { ...selectedIpIds };
-    filteredIps.forEach(ip => { newMap[ip.id] = checked; });
+    paginatedIps.forEach(ip => { newMap[ip.id] = checked; });
     setSelectedIpIds(newMap);
   };
 
@@ -379,17 +407,18 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
-              <ScrollArea className="h-[500px] lg:h-[600px]">
-                <Table>
-                  <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
-                    <TableRow className="hover:bg-transparent border-b border-border/60">
-                      <TableHead className="w-[140px] sm:w-[180px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-4 sm:pl-6">Device</TableHead>
-                      <TableHead className="w-[100px] sm:w-[180px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-4 sm:pl-6">Available</TableHead>
-                      <TableHead className="h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-4 sm:pr-6">Usage</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                <TableBody>
-                  {filteredPhones.map(phone => {
+              <div className="h-[500px] lg:h-[600px] flex flex-col">
+                <div className="flex-1 overflow-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
+                      <TableRow className="hover:bg-transparent border-b border-border/60">
+                        <TableHead className="w-[140px] sm:w-[180px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-4 sm:pl-6">Device</TableHead>
+                        <TableHead className="w-[100px] sm:w-[180px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-4 sm:pl-6">Available</TableHead>
+                        <TableHead className="h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-4 sm:pr-6">Usage</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedPhones.map(phone => {
                     const usage = getPhoneSlotUsage(phone.id);
                     const isFull = isAtCapacity(usage);
                     const percentage = getUsagePercentage(usage);
@@ -447,20 +476,52 @@ export default function Dashboard() {
                       </TableRow>
                     );
                   })}
-                  {filteredPhones.length === 0 && (
-                     <TableRow>
-                       <TableCell colSpan={3} className="h-32 text-center">
-                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                            <Smartphone className="h-8 w-8 opacity-20" />
-                            <span className="text-sm">No phones found</span>
-                          </div>
-                       </TableCell>
-                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </CardContent>
+                      {paginatedPhones.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="h-32 text-center">
+                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                              <Smartphone className="h-8 w-8 opacity-20" />
+                              <span className="text-sm">No phones found</span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+                {/* Pagination */}
+                {filteredPhones.length > 0 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/5">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {((phonePage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(phonePage * ITEMS_PER_PAGE, filteredPhones.length)} of {filteredPhones.length}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPhonePage(p => Math.max(1, p - 1))}
+                        disabled={phonePage === 1}
+                        className="h-7 cursor-pointer"
+                      >
+                        <ChevronLeft className="h-3 w-3" />
+                      </Button>
+                      <div className="text-xs">
+                        {phonePage} / {totalPhonePages}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPhonePage(p => Math.min(totalPhonePages, p + 1))}
+                        disabled={phonePage === totalPhonePages}
+                        className="h-7 cursor-pointer"
+                      >
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
         </Card>
 
         {/* IP List */}
@@ -524,9 +585,9 @@ export default function Dashboard() {
             </div>
           </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
-              <ScrollArea className="h-[500px] lg:h-[600px]">
+              <div className="h-[500px] lg:h-[600px] flex flex-col">
                 {/* Desktop table (hidden on mobile) */}
-                <div className="hidden sm:block">
+                <div className="hidden sm:block flex-1 overflow-auto">
                   <Table>
                     <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                       <TableRow className="hover:bg-transparent border-b border-border/60">
@@ -535,7 +596,7 @@ export default function Dashboard() {
                             type="checkbox"
                             className="scale-75 sm:scale-100"
                             aria-label="select all visible"
-                            checked={filteredIps.length > 0 && filteredIps.every(ip => selectedIpIds[ip.id])}
+                            checked={paginatedIps.length > 0 && paginatedIps.every(ip => selectedIpIds[ip.id])}
                             onChange={(e) => toggleSelectAllVisible(e.target.checked)}
                           />
                         </TableHead>
@@ -546,7 +607,7 @@ export default function Dashboard() {
                       </TableRow>
                     </TableHeader>
                   <TableBody>
-                    {filteredIps.map(ip => {
+                    {paginatedIps.map(ip => {
                       const usage = getIpSlotUsage(ip.id);
                       const isFull = isAtCapacity(usage);
                       const percentage = getUsagePercentage(usage);
@@ -595,7 +656,7 @@ export default function Dashboard() {
                         </TableRow>
                       );
                     })}
-                    {filteredIps.length === 0 && (
+                    {paginatedIps.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={6} className="h-32 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -610,8 +671,8 @@ export default function Dashboard() {
               </div>
 
               {/* Mobile list (visible only on small screens) */}
-              <div className="sm:hidden p-3 space-y-3">
-                {filteredIps.map(ip => {
+              <div className="sm:hidden flex-1 overflow-auto p-3 space-y-3">
+                {paginatedIps.map(ip => {
                   const usage = getIpSlotUsage(ip.id);
                   const isFull = isAtCapacity(usage);
                   const percentage = getUsagePercentage(usage);
@@ -642,14 +703,46 @@ export default function Dashboard() {
                     </div>
                   );
                 })}
-                {filteredIps.length === 0 && (
+                {paginatedIps.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <Network className="h-8 w-8 opacity-20 mx-auto" />
                     <div className="mt-2">No IPs found</div>
                   </div>
                 )}
               </div>
-            </ScrollArea>
+              
+              {/* Pagination */}
+              {filteredIps.length > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/5">
+                  <div className="text-xs text-muted-foreground">
+                    Showing {((ipPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(ipPage * ITEMS_PER_PAGE, filteredIps.length)} of {filteredIps.length}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIpPage(p => Math.max(1, p - 1))}
+                      disabled={ipPage === 1}
+                      className="h-7 cursor-pointer"
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                    </Button>
+                    <div className="text-xs">
+                      {ipPage} / {totalIpPages}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIpPage(p => Math.min(totalIpPages, p + 1))}
+                      disabled={ipPage === totalIpPages}
+                      className="h-7 cursor-pointer"
+                    >
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
