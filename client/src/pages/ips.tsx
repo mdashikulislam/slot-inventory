@@ -30,6 +30,7 @@ export default function IpsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [slotFilter, setSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4">("all");
   const [providerFilter, setProviderFilter] = useState<string>("all");
+  const [computerFilter, setComputerFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
@@ -46,6 +47,7 @@ export default function IpsPage() {
       password: "11224411",
       provider: "",
       remark: "",
+      computer: "",
     },
   });
 
@@ -75,6 +77,7 @@ export default function IpsPage() {
       password: ip.password || "11224411",
       provider: ip.provider || "",
       remark: ip.remark || "",
+      computer: ip.computer || "",
     });
     setIsDialogOpen(true);
   };
@@ -99,6 +102,7 @@ export default function IpsPage() {
       password: "11224411",
       provider: "",
       remark: "",
+      computer: "",
     });
     setIsDialogOpen(true);
   };
@@ -114,7 +118,7 @@ export default function IpsPage() {
     return calculateTotalUsage(relevantSlots);
   };
 
-  // Copy to clipboard
+  // Copy to clipboard - format: ip:port:username:password
   const copyToClipboard = async (text: string, id: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -199,8 +203,10 @@ export default function IpsPage() {
         (slotFilter === '4' ? usage >= 4 : usage === parseInt(slotFilter, 10));
       
       const matchesProvider = providerFilter === 'all' || ip.provider === providerFilter;
+      
+      const matchesComputer = computerFilter === 'all' || ip.computer === computerFilter;
 
-      return matchesSearch && matchesSlot && matchesProvider;
+      return matchesSearch && matchesSlot && matchesProvider && matchesComputer;
     }).sort((a, b) => {
       if (sortField === 'ipAddress') {
         const comparison = a.ipAddress.localeCompare(b.ipAddress);
@@ -212,7 +218,7 @@ export default function IpsPage() {
         return sortDirection === 'asc' ? comparison : -comparison;
       }
     });
-  }, [ips, searchQuery, slotFilter, providerFilter, slots, sortField, sortDirection]);
+  }, [ips, searchQuery, slotFilter, providerFilter, computerFilter, slots, sortField, sortDirection]);
 
   // Pagination
   const totalPages = Math.ceil(filteredIps.length / ITEMS_PER_PAGE);
@@ -224,7 +230,7 @@ export default function IpsPage() {
   // Reset to page 1 when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [searchQuery, slotFilter, providerFilter]);
+  }, [searchQuery, slotFilter, providerFilter, computerFilter]);
 
   const handleExport = () => {
     const lines = filteredIps.map(ip => {
@@ -338,6 +344,24 @@ export default function IpsPage() {
                   {uniqueProviders.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <Select value={computerFilter} onValueChange={setComputerFilter}>
+                <SelectTrigger className="h-9 w-full sm:w-40 cursor-pointer">
+                  <SelectValue placeholder="All Computers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Computers</SelectItem>
+                  <SelectItem value="Computer 1">Computer 1</SelectItem>
+                  <SelectItem value="Computer 2">Computer 2</SelectItem>
+                  <SelectItem value="Computer 3">Computer 3</SelectItem>
+                  <SelectItem value="Computer 4">Computer 4</SelectItem>
+                  <SelectItem value="Computer 5">Computer 5</SelectItem>
+                  <SelectItem value="Computer 6">Computer 6</SelectItem>
+                  <SelectItem value="Computer 7">Computer 7</SelectItem>
+                  <SelectItem value="Computer 8">Computer 8</SelectItem>
+                  <SelectItem value="Computer 9">Computer 9</SelectItem>
+                  <SelectItem value="Computer 10">Computer 10</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardHeader>
@@ -362,6 +386,7 @@ export default function IpsPage() {
                 </TableHead>
                 <TableHead>Port</TableHead>
                 <TableHead>Provider</TableHead>
+                <TableHead>Computer</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => toggleSort('usage')}>
                   <div className="flex items-center gap-2">
                     Slots Used (15d)
@@ -375,7 +400,7 @@ export default function IpsPage() {
             <TableBody>
               {paginatedIps.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Search className="h-8 w-8 opacity-20" />
                       <p>{searchQuery || slotFilter !== 'all' || providerFilter !== 'all' ? 'No IPs match your filters.' : 'No IPs found. Click "Add IP" to create one.'}</p>
@@ -405,7 +430,10 @@ export default function IpsPage() {
                             variant="ghost"
                             size="sm"
                             className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                            onClick={() => copyToClipboard(ip.ipAddress, `ip-${ip.id}`)}
+                            onClick={() => {
+                              const copyText = `${ip.ipAddress}:${ip.port || ''}:${ip.username || ''}:${ip.password || ''}`;
+                              copyToClipboard(copyText, `ip-${ip.id}`);
+                            }}
                           >
                             {copiedId === `ip-${ip.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
                           </Button>
@@ -413,6 +441,7 @@ export default function IpsPage() {
                       </TableCell>
                       <TableCell className="font-mono text-xs md:text-sm" data-testid={`text-port-${ip.id}`}>{ip.port || "-"}</TableCell>
                       <TableCell data-testid={`text-provider-${ip.id}`}>{ip.provider || "-"}</TableCell>
+                      <TableCell data-testid={`text-computer-${ip.id}`}>{ip.computer || "-"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -559,6 +588,36 @@ export default function IpsPage() {
                     <FormControl>
                       <Input placeholder="e.g. AWS" {...field} value={field.value ?? ""} data-testid="input-provider" />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="computer"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Computer</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-computer">
+                          <SelectValue placeholder="Select computer (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="Computer 1">Computer 1</SelectItem>
+                        <SelectItem value="Computer 2">Computer 2</SelectItem>
+                        <SelectItem value="Computer 3">Computer 3</SelectItem>
+                        <SelectItem value="Computer 4">Computer 4</SelectItem>
+                        <SelectItem value="Computer 5">Computer 5</SelectItem>
+                        <SelectItem value="Computer 6">Computer 6</SelectItem>
+                        <SelectItem value="Computer 7">Computer 7</SelectItem>
+                        <SelectItem value="Computer 8">Computer 8</SelectItem>
+                        <SelectItem value="Computer 9">Computer 9</SelectItem>
+                        <SelectItem value="Computer 10">Computer 10</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

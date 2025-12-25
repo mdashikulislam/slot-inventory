@@ -29,6 +29,7 @@ export default function PhonesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [slotFilter, setSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4">("all");
+  const [computerFilter, setComputerFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
@@ -42,6 +43,7 @@ export default function PhonesPage() {
       phoneNumber: "",
       email: "",
       remark: "",
+      computer: "",
     },
   });
 
@@ -68,6 +70,7 @@ export default function PhonesPage() {
       phoneNumber: phone.phoneNumber,
       email: phone.email,
       remark: phone.remark || "",
+      computer: phone.computer || "",
     });
     setIsDialogOpen(true);
   };
@@ -89,6 +92,7 @@ export default function PhonesPage() {
       phoneNumber: "",
       email: "",
       remark: "",
+      computer: "",
     });
     setIsDialogOpen(true);
   };
@@ -182,6 +186,10 @@ export default function PhonesPage() {
         if (slotFilter === '4') return usage >= 4;
         return usage === parseInt(slotFilter, 10);
       })
+      .filter(p => {
+        if (computerFilter === 'all') return true;
+        return p.computer === computerFilter;
+      })
       .sort((a, b) => {
         if (sortField === 'phoneNumber') {
           const comparison = a.phoneNumber.localeCompare(b.phoneNumber);
@@ -193,7 +201,7 @@ export default function PhonesPage() {
           return sortDirection === 'asc' ? comparison : -comparison;
         }
       });
-  }, [phones, searchQuery, slotFilter, slots, sortField, sortDirection]);
+  }, [phones, searchQuery, slotFilter, computerFilter, slots, sortField, sortDirection]);
 
   // Pagination
   const totalPages = Math.ceil(filteredPhones.length / ITEMS_PER_PAGE);
@@ -205,7 +213,7 @@ export default function PhonesPage() {
   // Reset to page 1 when filters change
   useMemo(() => {
     setCurrentPage(1);
-  }, [searchQuery, slotFilter]);
+  }, [searchQuery, slotFilter, computerFilter]);
 
   if (isLoading) {
     return (
@@ -278,6 +286,24 @@ export default function PhonesPage() {
                   <SelectItem value="4">4 Used</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={computerFilter} onValueChange={setComputerFilter}>
+                <SelectTrigger className="h-9 w-full sm:w-40 cursor-pointer">
+                  <SelectValue placeholder="All Computers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Computers</SelectItem>
+                  <SelectItem value="Computer 1">Computer 1</SelectItem>
+                  <SelectItem value="Computer 2">Computer 2</SelectItem>
+                  <SelectItem value="Computer 3">Computer 3</SelectItem>
+                  <SelectItem value="Computer 4">Computer 4</SelectItem>
+                  <SelectItem value="Computer 5">Computer 5</SelectItem>
+                  <SelectItem value="Computer 6">Computer 6</SelectItem>
+                  <SelectItem value="Computer 7">Computer 7</SelectItem>
+                  <SelectItem value="Computer 8">Computer 8</SelectItem>
+                  <SelectItem value="Computer 9">Computer 9</SelectItem>
+                  <SelectItem value="Computer 10">Computer 10</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardHeader>
@@ -301,6 +327,7 @@ export default function PhonesPage() {
                   </div>
                 </TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Computer</TableHead>
                 <TableHead className="cursor-pointer" onClick={() => toggleSort('usage')}>
                   <div className="flex items-center gap-2">
                     Slots Used (15d)
@@ -314,7 +341,7 @@ export default function PhonesPage() {
             <TableBody>
               {paginatedPhones.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     {searchQuery || slotFilter !== 'all' ? 'No phones match your filters.' : 'No phones found. Click "Add Phone" to create one.'}
                   </TableCell>
                 </TableRow>
@@ -348,6 +375,7 @@ export default function PhonesPage() {
                         </div>
                       </TableCell>
                       <TableCell data-testid={`text-email-${phone.id}`}>{phone.email || "-"}</TableCell>
+                      <TableCell data-testid={`text-computer-${phone.id}`}>{phone.computer || "-"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -464,6 +492,36 @@ export default function PhonesPage() {
                     <FormControl>
                       <Input placeholder="Optional notes..." {...field} value={field.value || ""} data-testid="input-remark" />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="computer"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Computer</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-computer">
+                          <SelectValue placeholder="Select computer (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="Computer 1">Computer 1</SelectItem>
+                        <SelectItem value="Computer 2">Computer 2</SelectItem>
+                        <SelectItem value="Computer 3">Computer 3</SelectItem>
+                        <SelectItem value="Computer 4">Computer 4</SelectItem>
+                        <SelectItem value="Computer 5">Computer 5</SelectItem>
+                        <SelectItem value="Computer 6">Computer 6</SelectItem>
+                        <SelectItem value="Computer 7">Computer 7</SelectItem>
+                        <SelectItem value="Computer 8">Computer 8</SelectItem>
+                        <SelectItem value="Computer 9">Computer 9</SelectItem>
+                        <SelectItem value="Computer 10">Computer 10</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

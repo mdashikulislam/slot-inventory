@@ -22,6 +22,7 @@ export const phones = pgTable("phones", {
   phoneNumber: text("phone_number").notNull().unique(),
   email: text("email").default(""),
   remark: text("remark").default(""),
+  computer: text("computer").default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -43,6 +44,7 @@ export const ips = pgTable("ips", {
   password: text("password").default(""),
   provider: text("provider").default(""),
   remark: text("remark").default(""),
+  computer: text("computer").default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

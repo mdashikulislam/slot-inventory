@@ -46,9 +46,11 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   // Phone filters: slot-count only (no provider)
   const [phoneSlotFilter, setPhoneSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4">("all");
+  const [phoneComputerFilter, setPhoneComputerFilter] = useState<string>("all");
   // IP filters: slot-count and provider
   const [ipSlotFilter, setIpSlotFilter] = useState<"all" | "0" | "1" | "2" | "3" | "4">("all");
   const [ipProviderFilter, setIpProviderFilter] = useState<string>("all");
+  const [ipComputerFilter, setIpComputerFilter] = useState<string>("all");
 
   // Selection state for exporting specific IPs (checkboxes)
   const [selectedIpIds, setSelectedIpIds] = useState<Record<string, boolean>>({});
@@ -157,6 +159,11 @@ export default function Dashboard() {
         if (phoneSlotFilter === '4') return usage >= 4;
         return usage === parseInt(phoneSlotFilter, 10);
       })
+      // apply computer filter
+      .filter(p => {
+        if (phoneComputerFilter === 'all') return true;
+        return p.computer === phoneComputerFilter;
+      })
       // Sort by usage ascending (most free first), then by phoneNumber
       .sort((a, b) => {
         const ua = getPhoneSlotUsage(a.id);
@@ -164,7 +171,7 @@ export default function Dashboard() {
         if (ua !== ub) return ua - ub;
         return a.phoneNumber.localeCompare(b.phoneNumber);
       });
-  }, [phones, searchQuery, slots, phoneSlotFilter]);
+  }, [phones, searchQuery, slots, phoneSlotFilter, phoneComputerFilter]);
 
   // Paginated phones
   const totalPhonePages = Math.ceil(filteredPhones.length / ITEMS_PER_PAGE);
@@ -192,6 +199,11 @@ export default function Dashboard() {
         if (ipProviderFilter === 'all') return true;
         return (i.provider || '') === ipProviderFilter;
       })
+      // apply computer filter
+      .filter(i => {
+        if (ipComputerFilter === 'all') return true;
+        return i.computer === ipComputerFilter;
+      })
       // Sort by usage ascending (most free first), then by ipAddress
       .sort((a, b) => {
         const ua = getIpSlotUsage(a.id);
@@ -199,7 +211,7 @@ export default function Dashboard() {
         if (ua !== ub) return ua - ub;
         return a.ipAddress.localeCompare(b.ipAddress);
       });
-  }, [ips, searchQuery, slots, ipSlotFilter, ipProviderFilter]);
+  }, [ips, searchQuery, slots, ipSlotFilter, ipProviderFilter, ipComputerFilter]);
 
   // Paginated IPs
   const totalIpPages = Math.ceil(filteredIps.length / ITEMS_PER_PAGE);
@@ -211,11 +223,11 @@ export default function Dashboard() {
   // Reset pages when filters change
   useMemo(() => {
     setPhonePage(1);
-  }, [searchQuery, phoneSlotFilter]);
+  }, [searchQuery, phoneSlotFilter, phoneComputerFilter]);
 
   useMemo(() => {
     setIpPage(1);
-  }, [searchQuery, ipSlotFilter, ipProviderFilter]);
+  }, [searchQuery, ipSlotFilter, ipProviderFilter, ipComputerFilter]);
 
   // unique providers for IPs (used in provider dropdown)
   const uniqueProviders = useMemo<string[]>(() => {
@@ -403,6 +415,26 @@ export default function Dashboard() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="flex-1 sm:flex-initial">
+                    <Select value={phoneComputerFilter} onValueChange={setPhoneComputerFilter}>
+                      <SelectTrigger className="h-8 w-full sm:min-w-[100px] cursor-pointer">
+                        <SelectValue placeholder="Computer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="Computer 1">PC 1</SelectItem>
+                        <SelectItem value="Computer 2">PC 2</SelectItem>
+                        <SelectItem value="Computer 3">PC 3</SelectItem>
+                        <SelectItem value="Computer 4">PC 4</SelectItem>
+                        <SelectItem value="Computer 5">PC 5</SelectItem>
+                        <SelectItem value="Computer 6">PC 6</SelectItem>
+                        <SelectItem value="Computer 7">PC 7</SelectItem>
+                        <SelectItem value="Computer 8">PC 8</SelectItem>
+                        <SelectItem value="Computer 9">PC 9</SelectItem>
+                        <SelectItem value="Computer 10">PC 10</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -413,6 +445,7 @@ export default function Dashboard() {
                     <TableHeader className="bg-muted/10 sticky top-0 z-10 backdrop-blur-sm">
                       <TableRow className="hover:bg-transparent border-b border-border/60">
                         <TableHead className="w-[140px] sm:w-[180px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-4 sm:pl-6">Device</TableHead>
+                        <TableHead className="w-[80px] sm:w-[100px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Computer</TableHead>
                         <TableHead className="w-[100px] sm:w-[180px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground pl-4 sm:pl-6">Available</TableHead>
                         <TableHead className="h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-4 sm:pr-6">Usage</TableHead>
                       </TableRow>
@@ -450,6 +483,7 @@ export default function Dashboard() {
                             </Button>
                           </div>
                         </TableCell>
+                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground" data-testid={`text-phone-computer-${phone.id}`}>{phone.computer || "-"}</TableCell>
                         <TableCell className="pl-4 sm:pl-6 font-medium">
                           <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
                               isFull ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 
@@ -478,7 +512,7 @@ export default function Dashboard() {
                   })}
                       {paginatedPhones.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={3} className="h-32 text-center">
+                          <TableCell colSpan={4} className="h-32 text-center">
                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
                               <Smartphone className="h-8 w-8 opacity-20" />
                               <span className="text-sm">No phones found</span>
@@ -570,6 +604,26 @@ export default function Dashboard() {
                 </Select>
               </div>
               <div className="flex-1 min-w-[120px]">
+                <Select value={ipComputerFilter} onValueChange={setIpComputerFilter}>
+                  <SelectTrigger className="h-8 w-full cursor-pointer">
+                    <SelectValue placeholder="Computer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="Computer 1">PC 1</SelectItem>
+                    <SelectItem value="Computer 2">PC 2</SelectItem>
+                    <SelectItem value="Computer 3">PC 3</SelectItem>
+                    <SelectItem value="Computer 4">PC 4</SelectItem>
+                    <SelectItem value="Computer 5">PC 5</SelectItem>
+                    <SelectItem value="Computer 6">PC 6</SelectItem>
+                    <SelectItem value="Computer 7">PC 7</SelectItem>
+                    <SelectItem value="Computer 8">PC 8</SelectItem>
+                    <SelectItem value="Computer 9">PC 9</SelectItem>
+                    <SelectItem value="Computer 10">PC 10</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 min-w-[120px]">
                 <Button 
                   className="w-full h-8 cursor-pointer hover:bg-indigo-50 hover:border-indigo-300 dark:hover:bg-indigo-950" 
                   variant="outline" 
@@ -602,6 +656,7 @@ export default function Dashboard() {
                         </TableHead>
                         <TableHead className="w-[160px] sm:w-[220px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground">IP Address</TableHead>
                         <TableHead className="w-[100px] sm:w-[160px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Provider</TableHead>
+                        <TableHead className="w-[80px] sm:w-[100px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Computer</TableHead>
                         <TableHead className="w-[80px] sm:w-[140px] h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Available</TableHead>
                         <TableHead className="h-10 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right pr-4 sm:pr-6">Usage</TableHead>
                       </TableRow>
@@ -630,7 +685,8 @@ export default function Dashboard() {
                                 className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  copyToClipboard(ip.ipAddress, `ip-${ip.id}`);
+                                  const copyText = `${ip.ipAddress}:${ip.port || ''}:${ip.username || ''}:${ip.password || ''}`;
+                                  copyToClipboard(copyText, `ip-${ip.id}`);
                                 }}
                               >
                                 {copiedId === `ip-${ip.id}` ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
@@ -638,6 +694,7 @@ export default function Dashboard() {
                             </div>
                           </TableCell>
                           <TableCell className="align-middle hidden lg:table-cell" onClick={() => setDetailIp(ip)}>{ip.provider || '-'}</TableCell>
+                          <TableCell className="align-middle hidden md:table-cell text-xs text-muted-foreground" onClick={() => setDetailIp(ip)} data-testid={`text-ip-computer-${ip.id}`}>{ip.computer || '-'}</TableCell>
                           <TableCell className="pl-4 sm:pl-6 align-middle cursor-pointer" onClick={() => setDetailIp(ip)}>
                             <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
                               remaining === 0 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
@@ -658,7 +715,7 @@ export default function Dashboard() {
                     })}
                     {paginatedIps.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-32 text-center">
+                        <TableCell colSpan={7} className="h-32 text-center">
                           <div className="flex flex-col items-center gap-2 text-muted-foreground">
                             <Network className="h-8 w-8 opacity-20" />
                             <span className="text-sm">No IPs found</span>
